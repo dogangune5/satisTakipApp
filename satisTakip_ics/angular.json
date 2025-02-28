@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "satisTakipApp": {
+    "satisTakip_ics": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -13,7 +13,7 @@
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
-            "outputPath": "dist/satis-takip-app",
+            "outputPath": "dist/satis-takip-ics",
             "index": "src/index.html",
             "browser": "src/main.ts",
             "polyfills": [
@@ -64,10 +64,10 @@
           "builder": "@angular-devkit/build-angular:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "satisTakipApp:build:production"
+              "buildTarget": "satisTakip_ics:build:production"
             },
             "development": {
-              "buildTarget": "satisTakipApp:build:development"
+              "buildTarget": "satisTakip_ics:build:development"
             }
           },
           "defaultConfiguration": "development"

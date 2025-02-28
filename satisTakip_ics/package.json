@@ -1,5 +1,5 @@
 {
-  "name": "satis-takip-app",
+  "name": "satis-takip-ics",
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
@@ -7,7 +7,7 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "serve:ssr:satisTakipApp": "node dist/satis-takip-app/server/server.mjs"
+    "serve:ssr:satisTakip_ics": "node dist/satis-takip-ics/server/server.mjs"
   },
   "private": true,
   "dependencies": {
@@ -21,6 +21,8 @@
     "@angular/platform-server": "^19.0.0",
     "@angular/router": "^19.0.0",
     "@angular/ssr": "^19.0.7",
+    "bootstrap": "^5.3.3",
+    "bootstrap-icons": "^1.11.3",
     "express": "^4.18.2",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
