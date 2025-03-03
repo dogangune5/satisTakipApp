@@ -1,96 +1,124 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { Customer } from '../models';
+import { environment } from '../../environments/environment';
+import { catchError, map, tap } from 'rxjs/operators';
+import { Observable, of, throwError } from 'rxjs';
 
 @Injectable({
   providedIn: 'root',
 })
 export class CustomerService {
-  private customers = signal<Customer[]>([
-    {
-      id: 1,
-      name: 'Ahmet Yılmaz',
-      companyName: 'Yılmaz Teknoloji A.Ş.',
-      email: 'ahmet@yilmaztech.com',
-      phone: '0532 123 4567',
-      address: 'Atatürk Cad. No:123',
-      city: 'İstanbul',
-      country: 'Türkiye',
-      notes: 'Yazılım çözümleri için potansiyel müşteri',
-      createdAt: new Date('2023-01-15'),
-      status: 'active',
-      contactPerson: 'Mehmet Yılmaz',
-      contactPersonTitle: 'Satın Alma Müdürü',
-      contactPersonPhone: '0533 765 4321',
-      taxId: '1234567890',
-      sector: 'Teknoloji',
-    },
-    {
-      id: 2,
-      name: 'Ayşe Demir',
-      companyName: 'Demir İnşaat Ltd. Şti.',
-      email: 'ayse@demirinsaat.com',
-      phone: '0542 987 6543',
-      address: 'Cumhuriyet Mah. 456 Sok. No:7',
-      city: 'Ankara',
-      country: 'Türkiye',
-      createdAt: new Date('2023-02-20'),
-      status: 'active',
-      sector: 'İnşaat',
-    },
-    {
-      id: 3,
-      name: 'Mehmet Kaya',
-      companyName: 'Kaya Otomotiv',
-      email: 'mehmet@kayaoto.com',
-      phone: '0555 333 2211',
-      address: 'Sanayi Sitesi B Blok No:42',
-      city: 'İzmir',
-      country: 'Türkiye',
-      createdAt: new Date('2023-03-10'),
-      status: 'lead',
-      notes: 'Filo yönetim sistemi ile ilgileniyor',
-    },
-  ]);
+  private http = inject(HttpClient);
+  private apiUrl = `${environment.apiUrl}/customers`;
 
+  // Müşteri verilerini tutan signal
+  private customers = signal<Customer[]>([]);
+
+  // Tüm müşterileri getir
   getCustomers() {
+    this.fetchCustomers().subscribe();
     return this.customers;
   }
 
-  getCustomerById(id: number) {
-    return this.customers().find((customer) => customer.id === id);
-  }
-
-  addCustomer(customer: Customer) {
-    const newCustomer = {
-      ...customer,
-      id: this.generateId(),
-      createdAt: new Date(),
-    };
-
-    this.customers.update((customers) => [...customers, newCustomer]);
-    return newCustomer;
-  }
-
-  updateCustomer(updatedCustomer: Customer) {
-    this.customers.update((customers) =>
-      customers.map((customer) =>
-        customer.id === updatedCustomer.id
-          ? { ...updatedCustomer, updatedAt: new Date() }
-          : customer
-      )
+  // Müşterileri API'den çek
+  fetchCustomers(): Observable<Customer[]> {
+    return this.http.get<Customer[]>(this.apiUrl).pipe(
+      tap((customers) => {
+        // Tarih alanlarını düzelt
+        const formattedCustomers = customers.map((customer) => ({
+          ...customer,
+          createdAt: new Date(customer.createdAt),
+          updatedAt: customer.updatedAt
+            ? new Date(customer.updatedAt)
+            : undefined,
+        }));
+        this.customers.set(formattedCustomers);
+      }),
+      catchError((error) => {
+        console.error('Müşteriler getirilirken hata oluştu', error);
+        return throwError(
+          () => new Error('Müşteriler getirilirken hata oluştu')
+        );
+      })
     );
   }
 
-  deleteCustomer(id: number) {
-    this.customers.update((customers) =>
-      customers.filter((customer) => customer.id !== id)
+  // ID'ye göre müşteri getir
+  getCustomerById(id: number): Observable<Customer | undefined> {
+    return this.http.get<Customer>(`${this.apiUrl}/${id}`).pipe(
+      map((customer) => ({
+        ...customer,
+        createdAt: new Date(customer.createdAt),
+        updatedAt: customer.updatedAt
+          ? new Date(customer.updatedAt)
+          : undefined,
+      })),
+      catchError((error) => {
+        console.error(`Müşteri ID:${id} getirilirken hata oluştu`, error);
+        return throwError(() => new Error('Müşteri getirilirken hata oluştu'));
+      })
     );
   }
 
-  private generateId(): number {
-    const customers = this.customers();
-    return customers.length > 0
-      ? Math.max(...customers.map((customer) => customer.id || 0)) + 1
-      : 1;
+  // Yeni müşteri ekle
+  addCustomer(customer: Customer): Observable<Customer> {
+    return this.http.post<Customer>(this.apiUrl, customer).pipe(
+      map((newCustomer) => ({
+        ...newCustomer,
+        createdAt: new Date(newCustomer.createdAt),
+        updatedAt: newCustomer.updatedAt
+          ? new Date(newCustomer.updatedAt)
+          : undefined,
+      })),
+      tap((newCustomer) => {
+        this.customers.update((customers) => [...customers, newCustomer]);
+      }),
+      catchError((error) => {
+        console.error('Müşteri eklenirken hata oluştu', error);
+        return throwError(() => new Error('Müşteri eklenirken hata oluştu'));
+      })
+    );
+  }
+
+  // Müşteri güncelle
+  updateCustomer(updatedCustomer: Customer): Observable<Customer> {
+    return this.http
+      .put<Customer>(`${this.apiUrl}/${updatedCustomer.id}`, updatedCustomer)
+      .pipe(
+        map((customer) => ({
+          ...customer,
+          createdAt: new Date(customer.createdAt),
+          updatedAt: customer.updatedAt
+            ? new Date(customer.updatedAt)
+            : undefined,
+        })),
+        tap((customer) => {
+          this.customers.update((customers) =>
+            customers.map((c) => (c.id === customer.id ? customer : c))
+          );
+        }),
+        catchError((error) => {
+          console.error('Müşteri güncellenirken hata oluştu', error);
+          return throwError(
+            () => new Error('Müşteri güncellenirken hata oluştu')
+          );
+        })
+      );
+  }
+
+  // Müşteri sil
+  deleteCustomer(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${id}`).pipe(
+      tap(() => {
+        this.customers.update((customers) =>
+          customers.filter((customer) => customer.id !== id)
+        );
+      }),
+      catchError((error) => {
+        console.error('Müşteri silinirken hata oluştu', error);
+        return throwError(() => new Error('Müşteri silinirken hata oluştu'));
+      })
+    );
   }
 }

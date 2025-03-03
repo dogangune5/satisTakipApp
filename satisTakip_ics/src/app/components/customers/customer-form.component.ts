@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import {
   FormBuilder,
@@ -15,7 +15,7 @@ import { PageHeaderComponent } from '../shared';
 @Component({
   selector: 'app-customer-form',
   standalone: true,
-  imports: [ ReactiveFormsModule, PageHeaderComponent, NgClass],
+  imports: [ReactiveFormsModule,PageHeaderComponent, NgClass],
   template: `
     <div class="container">
       <app-page-header
@@ -33,6 +33,17 @@ import { PageHeaderComponent } from '../shared';
 
       <div class="card mb-4">
         <div class="card-body">
+          @if (loading) {
+          <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+          </div>
+          } @else if (error) {
+          <div class="alert alert-danger">
+            {{ error }}
+          </div>
+          } @else {
           <form [formGroup]="customerForm" (ngSubmit)="onSubmit()">
             <div class="row mb-3">
               <div class="col-md-6">
@@ -259,29 +270,32 @@ import { PageHeaderComponent } from '../shared';
               >
                 İptal
               </button>
-              <button type="submit" class="btn btn-primary">
+              <button
+                type="submit"
+                class="btn btn-primary"
+                [disabled]="submitting"
+              >
+                @if (submitting) {
+                <span
+                  class="spinner-border spinner-border-sm me-1"
+                  role="status"
+                  aria-hidden="true"
+                ></span>
+                Kaydediliyor... } @else {
+                <i class="bi bi-check-circle me-1"></i>
                 {{ isEditMode ? 'Güncelle' : 'Kaydet' }}
+                }
               </button>
             </div>
           </form>
+          }
         </div>
       </div>
     </div>
   `,
-  styles: [
-    `
-      .form-label {
-        font-weight: 500;
-      }
-
-      h5 {
-        color: #3f51b5;
-        font-weight: 600;
-      }
-    `,
-  ],
+  styles: [],
 })
-export class CustomerFormComponent {
+export class CustomerFormComponent implements OnInit {
   private fb = inject(FormBuilder);
   private customerService = inject(CustomerService);
   private router = inject(Router);
@@ -292,12 +306,15 @@ export class CustomerFormComponent {
   isEditMode = false;
   customerId?: number;
   submitted = false;
+  loading = false;
+  submitting = false;
+  error = '';
 
-  constructor() {
+  ngOnInit(): void {
     this.initForm();
 
     this.route.params.subscribe((params) => {
-      if (params['id'] && params['id'] !== 'new') {
+      if (params['id']) {
         this.isEditMode = true;
         this.customerId = +params['id'];
         this.loadCustomerData();
@@ -330,12 +347,23 @@ export class CustomerFormComponent {
 
   loadCustomerData(): void {
     if (this.customerId) {
-      const customer = this.customerService.getCustomerById(this.customerId);
-      if (customer) {
-        this.customerForm.patchValue(customer);
-      } else {
-        this.router.navigate(['/customers']);
-      }
+      this.loading = true;
+      this.customerService.getCustomerById(this.customerId).subscribe({
+        next: (customer) => {
+          if (customer) {
+            this.customerForm.patchValue(customer);
+            this.loading = false;
+          } else {
+            this.error = 'Müşteri bulunamadı';
+            this.loading = false;
+          }
+        },
+        error: (err) => {
+          this.error = 'Müşteri bilgileri yüklenirken bir hata oluştu';
+          this.loading = false;
+          console.error(err);
+        },
+      });
     }
   }
 
@@ -346,16 +374,35 @@ export class CustomerFormComponent {
       return;
     }
 
+    this.submitting = true;
     const customerData: Customer = this.customerForm.value;
 
     if (this.isEditMode && this.customerId) {
       customerData.id = this.customerId;
-      this.customerService.updateCustomer(customerData);
+      this.customerService.updateCustomer(customerData).subscribe({
+        next: () => {
+          this.submitting = false;
+          this.router.navigate(['/customers', this.customerId]);
+        },
+        error: (err) => {
+          this.error = 'Müşteri güncellenirken bir hata oluştu';
+          this.submitting = false;
+          console.error(err);
+        },
+      });
     } else {
-      this.customerService.addCustomer(customerData);
+      this.customerService.addCustomer(customerData).subscribe({
+        next: (newCustomer) => {
+          this.submitting = false;
+          this.router.navigate(['/customers', newCustomer.id]);
+        },
+        error: (err) => {
+          this.error = 'Müşteri eklenirken bir hata oluştu';
+          this.submitting = false;
+          console.error(err);
+        },
+      });
     }
-
-    this.router.navigate(['/customers']);
   }
 
   goBack(): void {

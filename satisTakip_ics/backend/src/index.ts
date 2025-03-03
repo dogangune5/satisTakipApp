@@ -4,6 +4,9 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
+// Rotaları içe aktar
+import customerRoutes from './routes/customer.routes.js';
+
 // Ortam değişkenlerini yükle
 dotenv.config();
 
@@ -24,6 +27,9 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/', (req, res) => {
   res.json({ message: 'Satış Takip API çalışıyor!' });
 });
+
+// API rotaları
+app.use('/api/customers', customerRoutes);
 
 // Sunucuyu başlat
 app.listen(port, () => {

@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, NgClass, CurrencyPipe } from '@angular/common';
 
@@ -42,7 +42,17 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
         </div>
       </app-page-header>
 
-      @if (customer) {
+      @if (loading) {
+      <div class="d-flex justify-content-center my-5">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Yükleniyor...</span>
+        </div>
+      </div>
+      } @else if (error) {
+      <div class="alert alert-danger">
+        {{ error }}
+      </div>
+      } @else if (customer) {
       <div class="row">
         <div class="col-md-4">
           <div class="card mb-4">
@@ -316,12 +326,102 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
               }
             </div>
           </div>
+
+          <div class="card mb-4">
+            <div class="card-body">
+              <div
+                class="d-flex justify-content-between align-items-center mb-3"
+              >
+                <h5 class="card-title mb-0">Ödemeler</h5>
+                <a
+                  [routerLink]="['/payments/new']"
+                  [queryParams]="{ customerId: customer.id }"
+                  class="btn btn-sm btn-primary"
+                >
+                  <i class="bi bi-plus-circle me-1"></i> Yeni Ödeme
+                </a>
+              </div>
+              <hr />
+
+              @if (payments.length > 0) {
+              <div class="table-responsive">
+                <table class="table table-hover">
+                  <thead>
+                    <tr>
+                      <th>Ödeme No</th>
+                      <th>Sipariş No</th>
+                      <th>Tutar</th>
+                      <th>Ödeme Yöntemi</th>
+                      <th>Durum</th>
+                      <th>Tarih</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (payment of payments; track payment.id) {
+                    <tr
+                      class="cursor-pointer"
+                      (click)="navigateTo('/payments/' + payment.id)"
+                    >
+                      <td>{{ payment.paymentNumber }}</td>
+                      <td>{{ payment.orderNumber }}</td>
+                      <td>
+                        {{
+                          payment.amount | currency : 'TRY' : 'symbol' : '1.0-0'
+                        }}
+                      </td>
+                      <td>
+                        <span
+                          class="badge"
+                          [ngClass]="{
+                            'bg-primary':
+                              payment.paymentMethod === 'credit_card',
+                            'bg-success':
+                              payment.paymentMethod === 'bank_transfer',
+                            'bg-warning': payment.paymentMethod === 'cash',
+                            'bg-secondary':
+                              payment.paymentMethod === 'check' ||
+                              payment.paymentMethod === 'other'
+                          }"
+                        >
+                          {{
+                            payment.paymentMethod === 'credit_card'
+                              ? 'Kredi Kartı'
+                              : payment.paymentMethod === 'bank_transfer'
+                              ? 'Havale/EFT'
+                              : payment.paymentMethod === 'cash'
+                              ? 'Nakit'
+                              : payment.paymentMethod === 'check'
+                              ? 'Çek'
+                              : 'Diğer'
+                          }}
+                        </span>
+                      </td>
+                      <td>
+                        <app-status-badge
+                          [status]="payment.status"
+                          type="payment"
+                        >
+                        </app-status-badge>
+                      </td>
+                      <td>{{ payment.paymentDate | date : 'dd.MM.yyyy' }}</td>
+                    </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              } @else {
+              <div class="text-center py-4">
+                <p class="text-muted mb-0">
+                  Bu müşteri için henüz ödeme bulunmuyor
+                </p>
+              </div>
+              }
+            </div>
+          </div>
         </div>
       </div>
       } @else {
-      <div class="alert alert-warning">
-        Müşteri bulunamadı. <a routerLink="/customers">Müşteri listesine dön</a>
-      </div>
+      <div class="alert alert-warning">Müşteri bulunamadı.</div>
       }
     </div>
   `,
@@ -330,24 +430,17 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
       .customer-info p {
         margin-bottom: 0.5rem;
       }
-
-      .customer-info p:last-child {
-        margin-bottom: 0;
-      }
-
       .card-title {
         color: #3f51b5;
         font-weight: 600;
       }
-
-      .table th {
-        font-weight: 600;
-        background-color: #f8f9fa;
+      .progress {
+        margin-top: 5px;
       }
     `,
   ],
 })
-export class CustomerDetailComponent {
+export class CustomerDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private customerService = inject(CustomerService);
@@ -361,8 +454,10 @@ export class CustomerDetailComponent {
   offers = this.offerService.getOffers()();
   orders = this.orderService.getOrders()();
   payments = this.paymentService.getPayments()();
+  loading = false;
+  error = '';
 
-  constructor() {
+  ngOnInit(): void {
     this.route.params.subscribe((params) => {
       if (params['id']) {
         const customerId = +params['id'];
@@ -372,15 +467,41 @@ export class CustomerDetailComponent {
   }
 
   loadCustomerData(customerId: number): void {
-    this.customer = this.customerService.getCustomerById(customerId);
+    this.loading = true;
+    this.customerService.getCustomerById(customerId).subscribe({
+      next: (customer) => {
+        this.customer = customer;
 
-    if (this.customer) {
-      this.opportunities =
-        this.opportunityService.getOpportunitiesByCustomerId(customerId);
-      this.offers = this.offerService.getOffersByCustomerId(customerId);
-      this.orders = this.orderService.getOrdersByCustomerId(customerId);
-      this.payments = this.paymentService.getPaymentsByCustomerId(customerId);
-    }
+        if (customer) {
+          // Müşteriye ait fırsatları filtrele
+          this.opportunities = this.opportunityService
+            .getOpportunities()()
+            .filter((opp) => opp.customerId === customerId);
+
+          // Müşteriye ait teklifleri filtrele
+          this.offers = this.offerService
+            .getOffers()()
+            .filter((offer) => offer.customerId === customerId);
+
+          // Müşteriye ait siparişleri filtrele
+          this.orders = this.orderService
+            .getOrders()()
+            .filter((order) => order.customerId === customerId);
+
+          // Müşteriye ait ödemeleri filtrele
+          this.payments = this.paymentService
+            .getPayments()()
+            .filter((payment) => payment.customerId === customerId);
+        }
+
+        this.loading = false;
+      },
+      error: (err) => {
+        this.error = 'Müşteri bilgileri yüklenirken bir hata oluştu';
+        this.loading = false;
+        console.error(err);
+      },
+    });
   }
 
   navigateTo(path: string): void {
