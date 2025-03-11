@@ -1,4 +1,4 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { NgClass, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -79,18 +79,7 @@ import {
                 </tr>
               </thead>
               <tbody>
-                @if (loading) {
-                <tr>
-                  <td colspan="8" class="text-center py-4">
-                    <div class="d-flex justify-content-center">
-                      <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Yükleniyor...</span>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-                } @else { @for (customer of filteredCustomers; track
-                customer.id) {
+                @for (customer of filteredCustomers; track customer.id) {
                 <tr>
                   <td>
                     <a
@@ -130,8 +119,6 @@ import {
                         type="button"
                         class="btn btn-outline-danger"
                         (click)="prepareDelete(customer)"
-                        data-bs-toggle="modal"
-                        data-bs-target="#deleteCustomerModal"
                       >
                         <i class="bi bi-trash"></i>
                       </button>
@@ -147,7 +134,7 @@ import {
                     </div>
                   </td>
                 </tr>
-                } }
+                }
               </tbody>
             </table>
           </div>
@@ -177,7 +164,7 @@ import {
     `,
   ],
 })
-export class CustomerListComponent implements OnInit {
+export class CustomerListComponent {
   private customerService = inject(CustomerService);
 
   customers: Customer[] = [];
@@ -185,27 +172,16 @@ export class CustomerListComponent implements OnInit {
   searchTerm = '';
   statusFilter = 'all';
   customerToDelete: Customer | null = null;
-  loading = true;
-  error = '';
 
-  ngOnInit(): void {
+  constructor() {
     this.loadCustomers();
   }
 
   loadCustomers(): void {
-    this.loading = true;
-    this.customerService.fetchCustomers().subscribe({
-      next: (data) => {
-        this.customers = data;
-        this.filteredCustomers = [...this.customers];
-        this.loading = false;
-      },
-      error: (err) => {
-        this.error = 'Müşteriler yüklenirken bir hata oluştu.';
-        this.loading = false;
-        console.error(err);
-      },
-    });
+    this.customerService.getCustomers();
+    // Signal'a subscribe ol
+    this.customers = this.customerService.getCustomers()();
+    this.filteredCustomers = [...this.customers];
   }
 
   search(): void {
@@ -246,20 +222,21 @@ export class CustomerListComponent implements OnInit {
 
   prepareDelete(customer: Customer): void {
     this.customerToDelete = customer;
+    // Bootstrap modal needs to be triggered manually
+    // In a real app, you would use a proper Angular modal service
+    // This is just a placeholder for demonstration
   }
 
   deleteCustomer(): void {
-    if (this.customerToDelete && this.customerToDelete.id) {
-      this.loading = true;
-      this.customerService.deleteCustomer(this.customerToDelete.id).subscribe({
+    if (this.customerToDelete) {
+      this.customerService.deleteCustomer(this.customerToDelete.id!).subscribe({
         next: () => {
+          console.log('Müşteri başarıyla silindi');
           this.loadCustomers();
           this.customerToDelete = null;
         },
         error: (err) => {
-          this.error = 'Müşteri silinirken bir hata oluştu.';
-          this.loading = false;
-          console.error(err);
+          console.error('Müşteri silinirken hata oluştu:', err);
         },
       });
     }

@@ -1,7 +1,6 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, CurrencyPipe, NgClass } from '@angular/common';
-import { Observable, of } from 'rxjs';
 
 import { PaymentService, CustomerService, OrderService } from '../../services';
 import { Payment, Customer, Order } from '../../models';
@@ -319,19 +318,10 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
       .text-muted {
         font-size: 0.85rem;
       }
-
-      .card-title {
-        color: #3f51b5;
-        font-weight: 600;
-      }
-      .payment-info p,
-      .customer-info p {
-        margin-bottom: 0.5rem;
-      }
     `,
   ],
 })
-export class PaymentDetailComponent implements OnInit {
+export class PaymentDetailComponent {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private paymentService = inject(PaymentService);
@@ -342,10 +332,8 @@ export class PaymentDetailComponent implements OnInit {
   customer: Customer | undefined;
   order: Order | undefined;
   relatedPayments: Payment[] = [];
-  loading = false;
-  error = '';
 
-  ngOnInit(): void {
+  constructor() {
     this.route.params.subscribe((params) => {
       if (params['id']) {
         const paymentId = +params['id'];
@@ -355,75 +343,65 @@ export class PaymentDetailComponent implements OnInit {
   }
 
   loadPaymentData(paymentId: number): void {
-    this.loading = true;
+    this.payment = this.paymentService.getPaymentById(paymentId);
 
-    // Payment servisinden ödeme bilgisini al
-    const payment = this.paymentService.getPaymentById(paymentId);
-    this.payment = payment;
-
-    if (!payment) {
-      this.error = 'Ödeme bulunamadı';
-      this.loading = false;
+    if (!this.payment) {
+      this.router.navigate(['/payments']);
       return;
     }
 
-    // Customer servisinden müşteri bilgisini al
-    this.customerService.getCustomerById(payment.customerId).subscribe({
+    // Load customer data
+    this.customerService.getCustomerById(this.payment.customerId).subscribe({
       next: (customer) => {
-        this.customer = customer;
-
-        // Sipariş bilgilerini yükle
-        if (payment.orderId) {
-          const order = this.orderService.getOrderById(payment.orderId);
-          this.order = order;
+        if (customer) {
+          this.customer = customer;
         }
-
-        this.loadRelatedPayments();
-        this.loading = false;
       },
-      error: (err: unknown) => {
-        console.error('Müşteri bilgileri yüklenirken hata oluştu:', err);
-
-        if (payment.orderId) {
-          const order = this.orderService.getOrderById(payment.orderId);
-          this.order = order;
-        }
-
-        this.loadRelatedPayments();
-        this.loading = false;
+      error: (err) => {
+        console.error('Müşteri yüklenirken hata oluştu:', err);
       },
     });
+
+    // Load order data if available
+    if (this.payment.orderId) {
+      this.order = this.orderService.getOrderById(this.payment.orderId);
+    }
+
+    // Load related payments (other payments from the same customer)
+    this.loadRelatedPayments();
   }
 
   loadRelatedPayments(): void {
-    if (this.payment && this.payment.customerId) {
-      // Aynı müşteriye ait diğer ödemeleri getir, mevcut ödeme hariç
-      this.relatedPayments = this.paymentService
-        .getPaymentsByCustomerId(this.payment.customerId)
-        .filter((p) => p.id !== this.payment?.id);
-    }
+    if (!this.payment) return;
+
+    this.relatedPayments = this.paymentService
+      .getPayments()()
+      .filter(
+        (p) =>
+          p.customerId === this.payment?.customerId && p.id !== this.payment?.id
+      );
   }
 
   getTotalPaidAmount(): number {
-    if (!this.order || !this.payment) return 0;
+    if (!this.order) return 0;
 
-    // Sipariş için yapılan tüm ödemelerin toplamını hesapla
-    return (
-      this.relatedPayments
-        .filter((p) => p.orderId === this.order?.id)
-        .reduce((total, payment) => total + payment.amount, 0) +
-      (this.payment?.amount || 0)
-    );
+    // Get all completed payments for this order
+    const orderPayments = this.paymentService
+      .getPayments()()
+      .filter((p) => p.orderId === this.order?.id && p.status === 'completed');
+
+    // Calculate total paid amount
+    return orderPayments.reduce((sum, payment) => sum + payment.amount, 0);
   }
 
   getPaymentMethodText(method: string): string {
     switch (method) {
+      case 'cash':
+        return 'Nakit';
       case 'credit_card':
         return 'Kredi Kartı';
       case 'bank_transfer':
-        return 'Havale/EFT';
-      case 'cash':
-        return 'Nakit';
+        return 'Banka Transferi';
       case 'check':
         return 'Çek';
       case 'other':

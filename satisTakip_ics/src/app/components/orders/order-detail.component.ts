@@ -264,8 +264,6 @@ export class OrderDetailComponent {
 
   order: Order | undefined;
   customer: Customer | undefined;
-  loading: boolean = true;
-  error: string | null = null;
 
   constructor() {
     this.route.params.subscribe((params) => {
@@ -277,27 +275,21 @@ export class OrderDetailComponent {
   }
 
   loadOrderData(orderId: number): void {
-    this.loading = true;
+    this.order = this.orderService.getOrderById(orderId);
 
-    // Order servisinden sipariş bilgisini al
-    const order = this.orderService.getOrderById(orderId);
-    this.order = order;
-
-    if (!order) {
-      this.error = 'Sipariş bulunamadı';
-      this.loading = false;
+    if (!this.order) {
+      this.router.navigate(['/orders']);
       return;
     }
 
-    // Customer servisinden müşteri bilgisini al
-    this.customerService.getCustomerById(order.customerId).subscribe({
+    this.customerService.getCustomerById(this.order.customerId).subscribe({
       next: (customer) => {
-        this.customer = customer;
-        this.loading = false;
+        if (customer) {
+          this.customer = customer;
+        }
       },
       error: (err) => {
-        console.error('Müşteri bilgileri yüklenirken hata oluştu:', err);
-        this.loading = false;
+        console.error('Müşteri yüklenirken hata oluştu:', err);
       },
     });
   }

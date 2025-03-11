@@ -37,9 +37,9 @@ export class CustomerService {
       }),
       catchError((error) => {
         console.error('Müşteriler getirilirken hata oluştu', error);
-        return throwError(
-          () => new Error('Müşteriler getirilirken hata oluştu')
-        );
+        // Hata durumunda boş dizi döndür
+        this.customers.set([]);
+        return of([]);
       })
     );
   }
@@ -56,7 +56,7 @@ export class CustomerService {
       })),
       catchError((error) => {
         console.error(`Müşteri ID:${id} getirilirken hata oluştu`, error);
-        return throwError(() => new Error('Müşteri getirilirken hata oluştu'));
+        return of(undefined);
       })
     );
   }
@@ -84,7 +84,7 @@ export class CustomerService {
   // Müşteri güncelle
   updateCustomer(updatedCustomer: Customer): Observable<Customer> {
     return this.http
-      .put<Customer>(`${this.apiUrl}/${updatedCustomer.id}`, updatedCustomer)
+      .patch<Customer>(`${this.apiUrl}/${updatedCustomer.id}`, updatedCustomer)
       .pipe(
         map((customer) => ({
           ...customer,
