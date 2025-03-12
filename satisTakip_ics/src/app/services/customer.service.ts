@@ -46,7 +46,9 @@ export class CustomerService {
 
   // ID'ye göre müşteri getir
   getCustomerById(id: number): Observable<Customer | undefined> {
+    console.log(`API çağrısı: GET ${this.apiUrl}/${id}`);
     return this.http.get<Customer>(`${this.apiUrl}/${id}`).pipe(
+      tap((response) => console.log('API yanıtı:', response)),
       map((customer) => ({
         ...customer,
         createdAt: new Date(customer.createdAt),
@@ -109,8 +111,11 @@ export class CustomerService {
 
   // Müşteri sil
   deleteCustomer(id: number): Observable<void> {
+    console.log(`API çağrısı: DELETE ${this.apiUrl}/${id}`);
     return this.http.delete<void>(`${this.apiUrl}/${id}`).pipe(
       tap(() => {
+        console.log(`Müşteri silindi, ID: ${id}`);
+        // Müşteri listesini güncelle
         this.customers.update((customers) =>
           customers.filter((customer) => customer.id !== id)
         );

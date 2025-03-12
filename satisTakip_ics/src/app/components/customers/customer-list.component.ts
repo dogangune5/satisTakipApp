@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { NgClass, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -10,6 +10,9 @@ import {
   StatusBadgeComponent,
   ConfirmDialogComponent,
 } from '../shared';
+
+// Bootstrap Modal için global tanımlama
+declare var bootstrap: any;
 
 @Component({
   selector: 'app-customer-list',
@@ -164,7 +167,7 @@ import {
     `,
   ],
 })
-export class CustomerListComponent {
+export class CustomerListComponent implements OnInit {
   private customerService = inject(CustomerService);
 
   customers: Customer[] = [];
@@ -173,15 +176,24 @@ export class CustomerListComponent {
   statusFilter = 'all';
   customerToDelete: Customer | null = null;
 
-  constructor() {
+  constructor() {}
+
+  ngOnInit(): void {
     this.loadCustomers();
   }
 
   loadCustomers(): void {
-    this.customerService.getCustomers();
-    // Signal'a subscribe ol
-    this.customers = this.customerService.getCustomers()();
-    this.filteredCustomers = [...this.customers];
+    console.log('Müşteriler yükleniyor...');
+    this.customerService.fetchCustomers().subscribe({
+      next: (customers) => {
+        console.log('Müşteriler yüklendi:', customers);
+        this.customers = customers;
+        this.filteredCustomers = [...this.customers];
+      },
+      error: (err) => {
+        console.error('Müşteriler yüklenirken hata oluştu:', err);
+      },
+    });
   }
 
   search(): void {
@@ -221,17 +233,29 @@ export class CustomerListComponent {
   }
 
   prepareDelete(customer: Customer): void {
+    console.log('Silinecek müşteri:', customer);
     this.customerToDelete = customer;
-    // Bootstrap modal needs to be triggered manually
-    // In a real app, you would use a proper Angular modal service
-    // This is just a placeholder for demonstration
+
+    // Bootstrap modal'ı açmak için
+    const modal = document.getElementById('deleteCustomerModal');
+    if (modal) {
+      const bootstrapModal = new bootstrap.Modal(modal);
+      bootstrapModal.show();
+    } else {
+      console.error('Modal element bulunamadı: deleteCustomerModal');
+    }
   }
 
   deleteCustomer(): void {
-    if (this.customerToDelete) {
-      this.customerService.deleteCustomer(this.customerToDelete.id!).subscribe({
+    if (this.customerToDelete && this.customerToDelete.id) {
+      console.log(`Müşteri siliniyor, ID: ${this.customerToDelete.id}`);
+
+      this.customerService.deleteCustomer(this.customerToDelete.id).subscribe({
         next: () => {
-          console.log('Müşteri başarıyla silindi');
+          console.log(
+            `Müşteri başarıyla silindi: ${this.customerToDelete?.companyName}`
+          );
+          // Müşteri listesini yeniden yükle
           this.loadCustomers();
           this.customerToDelete = null;
         },
@@ -239,6 +263,8 @@ export class CustomerListComponent {
           console.error('Müşteri silinirken hata oluştu:', err);
         },
       });
+    } else {
+      console.error('Silinecek müşteri seçilmedi veya ID değeri yok');
     }
   }
 }

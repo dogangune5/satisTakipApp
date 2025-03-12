@@ -330,10 +330,28 @@ export class CustomerFormComponent {
 
   loadCustomerData(): void {
     if (this.customerId) {
+      console.log(`Müşteri bilgileri yükleniyor, ID: ${this.customerId}`);
       this.customerService.getCustomerById(this.customerId).subscribe({
         next: (customer) => {
           if (customer) {
-            this.customerForm.patchValue(customer);
+            console.log('Müşteri bilgileri yüklendi:', customer);
+            // Form alanlarını müşteri verileriyle doldur
+            this.customerForm.patchValue({
+              companyName: customer.companyName,
+              name: customer.name,
+              email: customer.email,
+              phone: customer.phone,
+              address: customer.address,
+              city: customer.city,
+              country: customer.country,
+              status: customer.status,
+              contactPerson: customer.contactPerson,
+              contactPersonTitle: customer.contactPersonTitle,
+              contactPersonPhone: customer.contactPersonPhone,
+              taxId: customer.taxId,
+              sector: customer.sector,
+              notes: customer.notes,
+            });
           } else {
             console.error('Müşteri bulunamadı');
             this.router.navigate(['/customers']);
