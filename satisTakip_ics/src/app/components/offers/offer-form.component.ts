@@ -20,11 +20,7 @@ import { PageHeaderComponent } from '../shared';
 @Component({
   selector: 'app-offer-form',
   standalone: true,
-  imports: [
-    ReactiveFormsModule,
-    NgClass,
-    PageHeaderComponent,
-  ],
+  imports: [ReactiveFormsModule, NgClass, PageHeaderComponent],
   template: `
     <div class="container">
       <app-page-header
@@ -381,18 +377,23 @@ export class OfferFormComponent {
     this.route.queryParams.subscribe((queryParams) => {
       if (queryParams['opportunityId']) {
         const opportunityId = +queryParams['opportunityId'];
-        const opportunity =
-          this.opportunityService.getOpportunityById(opportunityId);
 
-        if (opportunity) {
-          this.offerForm.patchValue({
-            opportunityId,
-            customerId: opportunity.customerId,
-            title: `Teklif: ${opportunity.title}`,
-          });
+        this.opportunityService.getOpportunityById(opportunityId).subscribe({
+          next: (opportunity) => {
+            if (opportunity) {
+              this.offerForm.patchValue({
+                opportunityId,
+                customerId: opportunity.customerId,
+                title: `Teklif: ${opportunity.title}`,
+              });
 
-          this.onCustomerChange();
-        }
+              this.onCustomerChange();
+            }
+          },
+          error: (err) => {
+            console.error('Fırsat bilgisi alınırken hata oluştu:', err);
+          },
+        });
       }
     });
   }

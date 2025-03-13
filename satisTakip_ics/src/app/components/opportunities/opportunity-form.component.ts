@@ -15,11 +15,7 @@ import { PageHeaderComponent } from '../shared';
 @Component({
   selector: 'app-opportunity-form',
   standalone: true,
-  imports: [
-    ReactiveFormsModule,
-    NgClass,
-    PageHeaderComponent,
-  ],
+  imports: [ReactiveFormsModule, NgClass, PageHeaderComponent],
   template: `
     <div class="container">
       <app-page-header
@@ -337,28 +333,47 @@ export class OpportunityFormComponent {
 
   loadOpportunityData(): void {
     if (this.opportunityId) {
-      const opportunity = this.opportunityService.getOpportunityById(
-        this.opportunityId
-      );
-      if (opportunity) {
-        // Format date for input type="date"
-        const expectedCloseDate = opportunity.expectedCloseDate
-          ? this.formatDateForInput(opportunity.expectedCloseDate)
-          : '';
+      console.log(`Fırsat bilgileri yükleniyor, ID: ${this.opportunityId}`);
+      this.opportunityService.getOpportunityById(this.opportunityId).subscribe({
+        next: (opportunity) => {
+          if (opportunity) {
+            console.log('Fırsat bilgileri yüklendi:', opportunity);
 
-        // Format products array to string
-        const productsString = opportunity.products
-          ? opportunity.products.join('\n')
-          : '';
+            // Format date for input type="date"
+            const expectedCloseDate = opportunity.expectedCloseDate
+              ? this.formatDateForInput(opportunity.expectedCloseDate)
+              : '';
 
-        this.opportunityForm.patchValue({
-          ...opportunity,
-          expectedCloseDate,
-          products: productsString,
-        });
-      } else {
-        this.router.navigate(['/opportunities']);
-      }
+            // Format products array to string
+            const productsString = opportunity.products
+              ? opportunity.products.join('\n')
+              : '';
+
+            // Form alanlarını fırsat verileriyle doldur
+            this.opportunityForm.patchValue({
+              title: opportunity.title,
+              customerId: opportunity.customerId,
+              description: opportunity.description,
+              value: opportunity.value,
+              status: opportunity.status,
+              probability: opportunity.probability,
+              expectedCloseDate: expectedCloseDate,
+              assignedTo: opportunity.assignedTo,
+              products: productsString,
+              notes: opportunity.notes,
+              source: opportunity.source,
+              priority: opportunity.priority || 'medium',
+            });
+          } else {
+            console.error('Fırsat bulunamadı');
+            this.router.navigate(['/opportunities']);
+          }
+        },
+        error: (err) => {
+          console.error('Fırsat yüklenirken hata oluştu:', err);
+          this.router.navigate(['/opportunities']);
+        },
+      });
     }
   }
 
@@ -394,12 +409,28 @@ export class OpportunityFormComponent {
 
     if (this.isEditMode && this.opportunityId) {
       opportunityData.id = this.opportunityId;
-      this.opportunityService.updateOpportunity(opportunityData);
+      console.log('Fırsat güncelleniyor:', opportunityData);
+      this.opportunityService.updateOpportunity(opportunityData).subscribe({
+        next: (updatedOpportunity) => {
+          console.log('Fırsat başarıyla güncellendi:', updatedOpportunity);
+          this.router.navigate(['/opportunities']);
+        },
+        error: (err) => {
+          console.error('Fırsat güncellenirken hata oluştu:', err);
+        },
+      });
     } else {
-      this.opportunityService.addOpportunity(opportunityData);
+      console.log('Yeni fırsat ekleniyor:', opportunityData);
+      this.opportunityService.addOpportunity(opportunityData).subscribe({
+        next: (newOpportunity) => {
+          console.log('Fırsat başarıyla eklendi:', newOpportunity);
+          this.router.navigate(['/opportunities']);
+        },
+        error: (err) => {
+          console.error('Fırsat eklenirken hata oluştu:', err);
+        },
+      });
     }
-
-    this.router.navigate(['/opportunities']);
   }
 
   goBack(): void {

@@ -357,18 +357,25 @@ export class OpportunityDetailComponent {
   }
 
   loadOpportunityData(opportunityId: number): void {
-    this.opportunity =
-      this.opportunityService.getOpportunityById(opportunityId);
+    this.opportunityService.getOpportunityById(opportunityId).subscribe({
+      next: (opportunity) => {
+        this.opportunity = opportunity;
 
-    if (this.opportunity) {
-      // Get related offers
-      const allOffers = this.offerService.getOffers()();
-      this.relatedOffers = allOffers.filter(
-        (offer) => offer.opportunityId === opportunityId
-      );
-    } else {
-      this.router.navigate(['/opportunities']);
-    }
+        if (this.opportunity) {
+          // Get related offers
+          const allOffers = this.offerService.getOffers()();
+          this.relatedOffers = allOffers.filter(
+            (offer) => offer.opportunityId === opportunityId
+          );
+        } else {
+          this.router.navigate(['/opportunities']);
+        }
+      },
+      error: (err) => {
+        console.error('Fırsat yüklenirken hata oluştu:', err);
+        this.router.navigate(['/opportunities']);
+      },
+    });
   }
 
   navigateTo(path: string): void {

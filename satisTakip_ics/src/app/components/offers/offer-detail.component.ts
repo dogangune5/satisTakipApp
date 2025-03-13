@@ -346,9 +346,21 @@ export class OfferDetailComponent {
   }
 
   getOpportunityTitle(opportunityId: number): string {
-    const opportunity =
-      this.opportunityService.getOpportunityById(opportunityId);
-    return opportunity ? opportunity.title : 'Bilinmeyen Fırsat';
+    // Geçici olarak bilinmeyen fırsat döndür, asenkron olarak güncellenecek
+    let title = 'Bilinmeyen Fırsat';
+
+    this.opportunityService.getOpportunityById(opportunityId).subscribe({
+      next: (opportunity) => {
+        if (opportunity) {
+          title = opportunity.title;
+        }
+      },
+      error: (err) => {
+        console.error('Fırsat bilgisi alınırken hata oluştu:', err);
+      },
+    });
+
+    return title;
   }
 
   canCreateOrder(): boolean {

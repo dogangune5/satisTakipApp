@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { NgClass, DatePipe, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -10,6 +10,9 @@ import {
   StatusBadgeComponent,
   ConfirmDialogComponent,
 } from '../shared';
+
+// Bootstrap Modal için global tanımlama
+declare var bootstrap: any;
 
 @Component({
   selector: 'app-opportunity-list',
@@ -168,8 +171,6 @@ import {
                         type="button"
                         class="btn btn-outline-danger"
                         (click)="prepareDelete(opportunity)"
-                        data-bs-toggle="modal"
-                        data-bs-target="#deleteOpportunityModal"
                       >
                         <i class="bi bi-trash"></i>
                       </button>
@@ -215,7 +216,7 @@ import {
     `,
   ],
 })
-export class OpportunityListComponent {
+export class OpportunityListComponent implements OnInit {
   private opportunityService = inject(OpportunityService);
   private customerService = inject(CustomerService);
 
@@ -225,9 +226,24 @@ export class OpportunityListComponent {
   statusFilter = 'all';
   opportunityToDelete: Opportunity | null = null;
 
-  constructor() {
-    this.opportunities = this.opportunityService.getOpportunities()();
-    this.filteredOpportunities = [...this.opportunities];
+  constructor() {}
+
+  ngOnInit(): void {
+    this.loadOpportunities();
+  }
+
+  loadOpportunities(): void {
+    console.log('Fırsatlar yükleniyor...');
+    this.opportunityService.fetchOpportunities().subscribe({
+      next: (opportunities) => {
+        console.log('Fırsatlar yüklendi:', opportunities);
+        this.opportunities = opportunities;
+        this.filteredOpportunities = [...this.opportunities];
+      },
+      error: (err) => {
+        console.error('Fırsatlar yüklenirken hata oluştu:', err);
+      },
+    });
   }
 
   search(): void {
@@ -264,15 +280,40 @@ export class OpportunityListComponent {
   }
 
   prepareDelete(opportunity: Opportunity): void {
+    console.log('Silinecek fırsat:', opportunity);
     this.opportunityToDelete = opportunity;
+
+    // Bootstrap modal'ı açmak için
+    const modal = document.getElementById('deleteOpportunityModal');
+    if (modal) {
+      const bootstrapModal = new bootstrap.Modal(modal);
+      bootstrapModal.show();
+    } else {
+      console.error('Modal element bulunamadı: deleteOpportunityModal');
+    }
   }
 
   deleteOpportunity(): void {
-    if (this.opportunityToDelete) {
-      this.opportunityService.deleteOpportunity(this.opportunityToDelete.id!);
-      this.opportunities = this.opportunityService.getOpportunities()();
-      this.applyFilters();
-      this.opportunityToDelete = null;
+    if (this.opportunityToDelete && this.opportunityToDelete.id) {
+      console.log(`Fırsat siliniyor, ID: ${this.opportunityToDelete.id}`);
+
+      this.opportunityService
+        .deleteOpportunity(this.opportunityToDelete.id)
+        .subscribe({
+          next: () => {
+            console.log(
+              `Fırsat başarıyla silindi: ${this.opportunityToDelete?.title}`
+            );
+            // Fırsat listesini yeniden yükle
+            this.loadOpportunities();
+            this.opportunityToDelete = null;
+          },
+          error: (err) => {
+            console.error('Fırsat silinirken hata oluştu:', err);
+          },
+        });
+    } else {
+      console.error('Silinecek fırsat seçilmedi veya ID değeri yok');
     }
   }
 

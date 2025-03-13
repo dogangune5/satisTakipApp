@@ -376,8 +376,17 @@ export class CustomerDetailComponent {
       next: (customer) => {
         if (customer) {
           this.customer = customer;
-          this.opportunities =
-            this.opportunityService.getOpportunitiesByCustomerId(customerId);
+          this.opportunityService
+            .getOpportunitiesByCustomerId(customerId)
+            .subscribe({
+              next: (opportunities) => {
+                this.opportunities = opportunities;
+              },
+              error: (err) => {
+                console.error('Fırsatlar yüklenirken hata oluştu:', err);
+                this.opportunities = [];
+              },
+            });
           this.offers = this.offerService.getOffersByCustomerId(customerId);
         }
       },
