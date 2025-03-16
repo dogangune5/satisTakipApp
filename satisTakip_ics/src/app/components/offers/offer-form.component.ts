@@ -473,65 +473,88 @@ export class OfferFormComponent {
 
   loadOfferData(): void {
     if (this.offerId) {
-      const offer = this.offerService.getOfferById(this.offerId);
-      if (offer) {
-        // Clear existing items
-        while (this.items.length) {
-          this.items.removeAt(0);
-        }
+      console.log(`Teklif bilgileri yükleniyor, ID: ${this.offerId}`);
+      this.offerService.getOfferById(this.offerId).subscribe({
+        next: (offer) => {
+          if (offer) {
+            console.log('Teklif bilgileri yüklendi:', offer);
 
-        // Add offer items
-        offer.items.forEach((item) => {
-          this.items.push(
-            this.fb.group({
-              productName: [item.productName, Validators.required],
-              quantity: [
-                item.quantity,
-                [Validators.required, Validators.min(1)],
-              ],
-              unitPrice: [
-                item.unitPrice,
-                [Validators.required, Validators.min(0)],
-              ],
-              discount: [item.discount || 0],
-              tax: [item.tax || 18],
-              total: [item.total],
-              description: [item.description || ''],
-            })
-          );
-        });
+            // Clear existing items
+            while (this.items.length) {
+              this.items.removeAt(0);
+            }
 
-        // Format date for input type="date"
-        const validUntil = offer.validUntil
-          ? this.formatDateForInput(offer.validUntil)
-          : '';
+            // Add offer items
+            offer.items.forEach((item) => {
+              this.items.push(
+                this.fb.group({
+                  productName: [item.productName, Validators.required],
+                  quantity: [
+                    item.quantity,
+                    [Validators.required, Validators.min(1)],
+                  ],
+                  unitPrice: [
+                    item.unitPrice,
+                    [Validators.required, Validators.min(0)],
+                  ],
+                  discount: [item.discount || 0],
+                  tax: [item.tax || 18],
+                  total: [item.total],
+                  description: [item.description || ''],
+                })
+              );
+            });
 
-        // Set other form values
-        this.offerForm.patchValue({
-          title: offer.title,
-          customerId: offer.customerId,
-          description: offer.description,
-          totalAmount: offer.totalAmount,
-          status: offer.status,
-          validUntil,
-          notes: offer.notes,
-          terms: offer.terms,
-          opportunityId: offer.opportunityId,
-        });
+            // Format date for input type="date"
+            const validUntil = offer.validUntil
+              ? this.formatDateForInput(offer.validUntil)
+              : '';
 
-        this.onCustomerChange();
-      } else {
-        this.router.navigate(['/offers']);
-      }
+            // Set other form values
+            this.offerForm.patchValue({
+              title: offer.title,
+              customerId: offer.customerId,
+              description: offer.description,
+              totalAmount: offer.totalAmount,
+              status: offer.status,
+              validUntil,
+              notes: offer.notes,
+              terms: offer.terms,
+              opportunityId: offer.opportunityId,
+            });
+
+            this.onCustomerChange();
+          } else {
+            console.error('Teklif bulunamadı');
+            this.router.navigate(['/offers']);
+          }
+        },
+        error: (err) => {
+          console.error('Teklif yüklenirken hata oluştu:', err);
+          this.router.navigate(['/offers']);
+        },
+      });
     }
   }
 
   onCustomerChange(): void {
-    const customerId = +this.offerForm.get('customerId')?.value;
+    const customerId = this.offerForm.get('customerId')?.value;
     if (customerId) {
-      this.filteredOpportunities = this.opportunities.filter(
-        (opportunity) => opportunity.customerId === customerId
-      );
+      // Müşteriye ait fırsatları filtrele
+      this.opportunityService
+        .getOpportunitiesByCustomerId(+customerId)
+        .subscribe({
+          next: (opportunities) => {
+            this.filteredOpportunities = opportunities;
+          },
+          error: (err) => {
+            console.error(
+              'Müşteriye ait fırsatlar getirilirken hata oluştu:',
+              err
+            );
+            this.filteredOpportunities = [];
+          },
+        });
     } else {
       this.filteredOpportunities = [];
     }
@@ -566,12 +589,28 @@ export class OfferFormComponent {
 
     if (this.isEditMode && this.offerId) {
       offerData.id = this.offerId;
-      this.offerService.updateOffer(offerData);
+      console.log('Teklif güncelleniyor:', offerData);
+      this.offerService.updateOffer(offerData).subscribe({
+        next: (updatedOffer) => {
+          console.log('Teklif başarıyla güncellendi:', updatedOffer);
+          this.router.navigate(['/offers']);
+        },
+        error: (err) => {
+          console.error('Teklif güncellenirken hata oluştu:', err);
+        },
+      });
     } else {
-      this.offerService.addOffer(offerData);
+      console.log('Yeni teklif ekleniyor:', offerData);
+      this.offerService.addOffer(offerData).subscribe({
+        next: (newOffer) => {
+          console.log('Teklif başarıyla eklendi:', newOffer);
+          this.router.navigate(['/offers']);
+        },
+        error: (err) => {
+          console.error('Teklif eklenirken hata oluştu:', err);
+        },
+      });
     }
-
-    this.router.navigate(['/offers']);
   }
 
   goBack(): void {

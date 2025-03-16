@@ -11,15 +11,15 @@ export interface OrderItem {
 
 export interface Order {
   id?: number;
-  orderNumber: string;
+  orderNumber?: string;
   customerId: number;
   customerName?: string;
   items: OrderItem[];
   totalAmount: number;
   status: 'new' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  orderDate: Date;
+  orderDate?: Date;
   deliveryDate?: Date;
-  createdAt: Date;
+  createdAt?: Date;
   updatedAt?: Date;
   notes?: string;
   shippingAddress?: string;

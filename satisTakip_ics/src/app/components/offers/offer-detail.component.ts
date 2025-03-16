@@ -23,7 +23,10 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
   ],
   template: `
     <div class="container">
-      <app-page-header title="Teklif Detayı" [subtitle]="offer?.title || ''">
+      <app-page-header
+        title="Teklif Detayı"
+        [subtitle]="offer ? offer.title || 'İsimsiz Teklif' : ''"
+      >
         <div class="btn-group">
           <button
             class="btn btn-outline-secondary me-2"
@@ -32,7 +35,7 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
             <i class="bi bi-arrow-left me-1"></i> Geri
           </button>
           <a
-            [routerLink]="['/offers', offer?.id, 'edit']"
+            [routerLink]="['/offers', offer ? offer.id : '', 'edit']"
             class="btn btn-outline-primary me-2"
           >
             <i class="bi bi-pencil me-1"></i> Düzenle
@@ -40,7 +43,7 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
           <button
             class="btn btn-outline-success"
             [routerLink]="['/orders/new']"
-            [queryParams]="{ offerId: offer?.id }"
+            [queryParams]="{ offerId: offer ? offer.id : '' }"
             [disabled]="!canCreateOrder()"
           >
             <i class="bi bi-cart me-1"></i> Sipariş Oluştur
@@ -328,17 +331,28 @@ export class OfferDetailComponent {
   }
 
   loadOfferData(offerId: number): void {
-    this.offer = this.offerService.getOfferById(offerId);
+    console.log(`Teklif bilgileri yükleniyor, ID: ${offerId}`);
+    this.offerService.getOfferById(offerId).subscribe({
+      next: (offer) => {
+        this.offer = offer;
 
-    if (this.offer) {
-      // Get related orders
-      const allOrders = this.orderService.getOrders()();
-      this.relatedOrders = allOrders.filter(
-        (order) => order.offerId === offerId
-      );
-    } else {
-      this.router.navigate(['/offers']);
-    }
+        if (this.offer) {
+          console.log('Teklif bilgileri yüklendi:', this.offer);
+          // Get related orders
+          const allOrders = this.orderService.getOrders()();
+          this.relatedOrders = allOrders.filter(
+            (order) => order.offerId === offerId
+          );
+        } else {
+          console.error('Teklif bulunamadı');
+          this.router.navigate(['/offers']);
+        }
+      },
+      error: (err) => {
+        console.error('Teklif yüklenirken hata oluştu:', err);
+        this.router.navigate(['/offers']);
+      },
+    });
   }
 
   navigateTo(path: string): void {
@@ -379,8 +393,16 @@ export class OfferDetailComponent {
         status,
       };
 
-      this.offerService.updateOffer(updatedOffer);
-      this.offer = updatedOffer;
+      console.log('Teklif durumu güncelleniyor:', status);
+      this.offerService.updateOffer(updatedOffer).subscribe({
+        next: (updated) => {
+          console.log('Teklif durumu güncellendi:', updated);
+          this.offer = updated;
+        },
+        error: (err) => {
+          console.error('Teklif durumu güncellenirken hata oluştu:', err);
+        },
+      });
     }
   }
 }

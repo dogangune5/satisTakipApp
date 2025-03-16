@@ -1,9 +1,13 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, CurrencyPipe, NgClass } from '@angular/common';
 
-import { OrderService, CustomerService } from '../../services';
-import { Order, Customer } from '../../models';
+import { OrderService } from '../../services/order.service';
+import { CustomerService } from '../../services/customer.service';
+import { OfferService } from '../../services/offer.service';
+import { Order } from '../../models/order.model';
+import { Customer } from '../../models/customer.model';
+import { Offer } from '../../models/offer.model';
 import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
 
 @Component({
@@ -19,18 +23,23 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
   template: `
     <div class="container">
       <app-page-header
-        [title]="'Sipariş Detayı'"
-        [subtitle]="'Sipariş No: ' + (order?.id || '')"
+        title="Sipariş Detayı"
+        [subtitle]="'Sipariş No: ' + (order ? order.id : '')"
       >
-        <button class="btn btn-outline-secondary me-2" routerLink="/orders">
-          <i class="bi bi-arrow-left me-1"></i> Geri
-        </button>
-        <button
-          class="btn btn-primary me-2"
-          [routerLink]="['/orders/edit', order?.id]"
-        >
-          <i class="bi bi-pencil me-1"></i> Düzenle
-        </button>
+        <div class="btn-group">
+          <button
+            class="btn btn-outline-secondary me-2"
+            (click)="navigateTo('/orders')"
+          >
+            <i class="bi bi-arrow-left me-1"></i> Geri
+          </button>
+          <a
+            [routerLink]="['/orders/edit', order ? order.id : '']"
+            class="btn btn-outline-primary me-2"
+          >
+            <i class="bi bi-pencil me-1"></i> Düzenle
+          </a>
+        </div>
       </app-page-header>
 
       @if (order) {
@@ -256,16 +265,20 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
     `,
   ],
 })
-export class OrderDetailComponent {
+export class OrderDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private orderService = inject(OrderService);
   private customerService = inject(CustomerService);
+  private offerService = inject(OfferService);
 
-  order: Order | undefined;
-  customer: Customer | undefined;
+  order: Order | null = null;
+  customer: Customer | null = null;
+  offer: Offer | null = null;
 
-  constructor() {
+  constructor() {}
+
+  ngOnInit(): void {
     this.route.params.subscribe((params) => {
       if (params['id']) {
         const orderId = +params['id'];
@@ -275,22 +288,130 @@ export class OrderDetailComponent {
   }
 
   loadOrderData(orderId: number): void {
-    this.order = this.orderService.getOrderById(orderId);
+    console.log(`Sipariş bilgileri yükleniyor, ID: ${orderId}`);
+    this.orderService.getOrderById(orderId).subscribe({
+      next: (order) => {
+        if (order) {
+          this.order = order;
+          console.log('Sipariş bilgileri yüklendi:', this.order);
 
-    if (!this.order) {
-      this.router.navigate(['/orders']);
-      return;
-    }
+          // Get customer details if available
+          if (this.order.customerId) {
+            this.customerService
+              .getCustomerById(this.order.customerId)
+              .subscribe({
+                next: (customer) => {
+                  if (customer) {
+                    this.customer = customer;
+                  }
+                },
+                error: (err) => {
+                  console.error(
+                    'Müşteri bilgileri yüklenirken hata oluştu:',
+                    err
+                  );
+                },
+              });
+          }
 
-    this.customerService.getCustomerById(this.order.customerId).subscribe({
-      next: (customer) => {
-        if (customer) {
-          this.customer = customer;
+          // Get offer details if available
+          if (this.order.offerId) {
+            this.offerService.getOfferById(this.order.offerId).subscribe({
+              next: (offer) => {
+                if (offer) {
+                  this.offer = offer;
+                }
+              },
+              error: (err) => {
+                console.error('Teklif bilgileri yüklenirken hata oluştu:', err);
+              },
+            });
+          }
+        } else {
+          console.error('Sipariş bulunamadı');
+          this.router.navigate(['/orders']);
         }
       },
       error: (err) => {
-        console.error('Müşteri yüklenirken hata oluştu:', err);
+        console.error('Sipariş yüklenirken hata oluştu:', err);
+        this.router.navigate(['/orders']);
       },
     });
+  }
+
+  updateStatus(
+    status: 'new' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
+  ): void {
+    if (this.order) {
+      const updatedOrder = {
+        ...this.order,
+        status,
+      };
+
+      console.log('Sipariş durumu güncelleniyor:', status);
+      this.orderService.updateOrder(updatedOrder).subscribe({
+        next: (updated) => {
+          console.log('Sipariş durumu güncellendi:', updated);
+          this.order = updated;
+        },
+        error: (err) => {
+          console.error('Sipariş durumu güncellenirken hata oluştu:', err);
+        },
+      });
+    }
+  }
+
+  updatePaymentStatus(paymentStatus: 'pending' | 'partial' | 'paid'): void {
+    if (this.order) {
+      const updatedOrder = {
+        ...this.order,
+        paymentStatus,
+      };
+
+      console.log('Ödeme durumu güncelleniyor:', paymentStatus);
+      this.orderService.updateOrder(updatedOrder).subscribe({
+        next: (updated) => {
+          console.log('Ödeme durumu güncellendi:', updated);
+          this.order = updated;
+        },
+        error: (err) => {
+          console.error('Ödeme durumu güncellenirken hata oluştu:', err);
+        },
+      });
+    }
+  }
+
+  getStatusText(status: string): string {
+    switch (status) {
+      case 'new':
+        return 'Yeni';
+      case 'processing':
+        return 'İşleniyor';
+      case 'shipped':
+        return 'Gönderildi';
+      case 'delivered':
+        return 'Teslim Edildi';
+      case 'cancelled':
+        return 'İptal Edildi';
+      default:
+        return status;
+    }
+  }
+
+  getPaymentStatusText(status: string): string {
+    switch (status) {
+      case 'pending':
+        return 'Bekliyor';
+      case 'partial':
+        return 'Kısmi Ödeme';
+      case 'paid':
+        return 'Ödendi';
+      default:
+        return status;
+    }
+  }
+
+  navigateTo(path: string): void {
+    this.router.navigate([path]);
   }
 }

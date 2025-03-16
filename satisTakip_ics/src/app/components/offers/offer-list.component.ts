@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { NgClass, DatePipe, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -10,6 +10,9 @@ import {
   StatusBadgeComponent,
   ConfirmDialogComponent,
 } from '../shared';
+
+// Bootstrap Modal için global tanımlama
+declare var bootstrap: any;
 
 @Component({
   selector: 'app-offer-list',
@@ -72,28 +75,28 @@ import {
               <thead>
                 <tr>
                   <th>Teklif No</th>
-                  <th>Başlık</th>
                   <th>Müşteri</th>
-                  <th>Toplam Tutar</th>
+                  <th>Başlık</th>
+                  <th>Tutar</th>
                   <th>Durum</th>
-                  <th>Geçerlilik Tarihi</th>
-                  <th>Oluşturma Tarihi</th>
+                  <th>Geçerlilik</th>
+                  <th>Oluşturulma</th>
                   <th>İşlemler</th>
                 </tr>
               </thead>
               <tbody>
                 @for (offer of filteredOffers; track offer.id) {
                 <tr>
-                  <td>{{ offer.offerNumber }}</td>
                   <td>
                     <a
                       [routerLink]="['/offers', offer.id]"
                       class="fw-bold text-decoration-none"
                     >
-                      {{ offer.title }}
+                      {{ offer.offerNumber }}
                     </a>
                   </td>
                   <td>{{ offer.customerName }}</td>
+                  <td>{{ offer.title }}</td>
                   <td>
                     {{
                       offer.totalAmount | currency : 'TRY' : 'symbol' : '1.0-0'
@@ -123,8 +126,6 @@ import {
                         type="button"
                         class="btn btn-outline-danger"
                         (click)="prepareDelete(offer)"
-                        data-bs-toggle="modal"
-                        data-bs-target="#deleteOfferModal"
                       >
                         <i class="bi bi-trash"></i>
                       </button>
@@ -170,7 +171,7 @@ import {
     `,
   ],
 })
-export class OfferListComponent {
+export class OfferListComponent implements OnInit {
   private offerService = inject(OfferService);
 
   offers: Offer[] = [];
@@ -179,9 +180,24 @@ export class OfferListComponent {
   statusFilter = 'all';
   offerToDelete: Offer | null = null;
 
-  constructor() {
-    this.offers = this.offerService.getOffers()();
-    this.filteredOffers = [...this.offers];
+  constructor() {}
+
+  ngOnInit(): void {
+    this.loadOffers();
+  }
+
+  loadOffers(): void {
+    console.log('Teklifler yükleniyor...');
+    this.offerService.fetchOffers().subscribe({
+      next: (offers) => {
+        console.log('Teklifler yüklendi:', offers);
+        this.offers = offers;
+        this.filteredOffers = [...this.offers];
+      },
+      error: (err) => {
+        console.error('Teklifler yüklenirken hata oluştu:', err);
+      },
+    });
   }
 
   search(): void {
@@ -208,7 +224,7 @@ export class OfferListComponent {
           offer.title.toLowerCase().includes(term) ||
           offer.offerNumber.toLowerCase().includes(term) ||
           offer.customerName?.toLowerCase().includes(term) ||
-          offer.description?.toLowerCase().includes(term)
+          (offer.description && offer.description.toLowerCase().includes(term))
       );
     }
 
@@ -216,15 +232,36 @@ export class OfferListComponent {
   }
 
   prepareDelete(offer: Offer): void {
+    console.log('Silinecek teklif:', offer);
     this.offerToDelete = offer;
+
+    // Bootstrap modal'ı açmak için
+    const modal = document.getElementById('deleteOfferModal');
+    if (modal) {
+      const bootstrapModal = new bootstrap.Modal(modal);
+      bootstrapModal.show();
+    } else {
+      console.error('Modal element bulunamadı: deleteOfferModal');
+    }
   }
 
   deleteOffer(): void {
-    if (this.offerToDelete) {
-      this.offerService.deleteOffer(this.offerToDelete.id!);
-      this.offers = this.offerService.getOffers()();
-      this.applyFilters();
-      this.offerToDelete = null;
+    if (this.offerToDelete && this.offerToDelete.id) {
+      console.log(`Teklif siliniyor, ID: ${this.offerToDelete.id}`);
+
+      this.offerService.deleteOffer(this.offerToDelete.id).subscribe({
+        next: () => {
+          console.log(`Teklif başarıyla silindi: ${this.offerToDelete?.title}`);
+          // Teklif listesini yeniden yükle
+          this.loadOffers();
+          this.offerToDelete = null;
+        },
+        error: (err) => {
+          console.error('Teklif silinirken hata oluştu:', err);
+        },
+      });
+    } else {
+      console.error('Silinecek teklif seçilmedi veya ID değeri yok');
     }
   }
 }

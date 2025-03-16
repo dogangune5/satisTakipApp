@@ -7,7 +7,7 @@ import {
   CustomerService,
   OfferService,
 } from '../../services';
-import { Opportunity, Offer } from '../../models';
+import { Opportunity, Offer, Customer } from '../../models';
 import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
 
 @Component({
@@ -25,7 +25,7 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
     <div class="container">
       <app-page-header
         title="Fırsat Detayı"
-        [subtitle]="opportunity?.title || ''"
+        [subtitle]="opportunity ? opportunity.title || 'İsimsiz Fırsat' : ''"
       >
         <div class="btn-group">
           <button
@@ -35,7 +35,11 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
             <i class="bi bi-arrow-left me-1"></i> Geri
           </button>
           <a
-            [routerLink]="['/opportunities', opportunity?.id, 'edit']"
+            [routerLink]="[
+              '/opportunities',
+              opportunity ? opportunity.id : '',
+              'edit'
+            ]"
             class="btn btn-outline-primary me-2"
           >
             <i class="bi bi-pencil me-1"></i> Düzenle
@@ -43,7 +47,7 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
           <button
             class="btn btn-outline-success"
             [routerLink]="['/offers/new']"
-            [queryParams]="{ opportunityId: opportunity?.id }"
+            [queryParams]="{ opportunityId: opportunity ? opportunity.id : '' }"
           >
             <i class="bi bi-file-earmark-text me-1"></i> Teklif Oluştur
           </button>
@@ -346,6 +350,7 @@ export class OpportunityDetailComponent {
   private offerService = inject(OfferService);
 
   opportunity: Opportunity | undefined;
+  customer: Customer | null = null;
   relatedOffers: Offer[] = [];
 
   constructor() {
@@ -357,17 +362,40 @@ export class OpportunityDetailComponent {
   }
 
   loadOpportunityData(opportunityId: number): void {
+    console.log(`Fırsat bilgileri yükleniyor, ID: ${opportunityId}`);
     this.opportunityService.getOpportunityById(opportunityId).subscribe({
       next: (opportunity) => {
         this.opportunity = opportunity;
 
         if (this.opportunity) {
+          console.log('Fırsat bilgileri yüklendi:', this.opportunity);
+
+          // Get customer details
+          if (this.opportunity.customerId) {
+            this.customerService
+              .getCustomerById(this.opportunity.customerId)
+              .subscribe({
+                next: (customer) => {
+                  if (customer) {
+                    this.customer = customer;
+                  }
+                },
+                error: (err) => {
+                  console.error(
+                    'Müşteri bilgileri yüklenirken hata oluştu:',
+                    err
+                  );
+                },
+              });
+          }
+
           // Get related offers
           const allOffers = this.offerService.getOffers()();
           this.relatedOffers = allOffers.filter(
             (offer) => offer.opportunityId === opportunityId
           );
         } else {
+          console.error('Fırsat bulunamadı');
           this.router.navigate(['/opportunities']);
         }
       },
@@ -392,6 +420,34 @@ export class OpportunityDetailComponent {
         return 'Düşük';
       default:
         return 'Belirtilmemiş';
+    }
+  }
+
+  updateStatus(
+    status:
+      | 'new'
+      | 'qualified'
+      | 'proposition'
+      | 'negotiation'
+      | 'closed-won'
+      | 'closed-lost'
+  ): void {
+    if (this.opportunity) {
+      const updatedOpportunity = {
+        ...this.opportunity,
+        status,
+      };
+
+      console.log('Fırsat durumu güncelleniyor:', status);
+      this.opportunityService.updateOpportunity(updatedOpportunity).subscribe({
+        next: (updated) => {
+          console.log('Fırsat durumu güncellendi:', updated);
+          this.opportunity = updated;
+        },
+        error: (err) => {
+          console.error('Fırsat durumu güncellenirken hata oluştu:', err);
+        },
+      });
     }
   }
 }

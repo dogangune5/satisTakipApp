@@ -23,6 +23,7 @@ export class CustomerService {
 
   // Müşterileri API'den çek
   fetchCustomers(): Observable<Customer[]> {
+    console.log("Müşteriler API'den getiriliyor...");
     return this.http.get<Customer[]>(this.apiUrl).pipe(
       tap((customers) => {
         // Tarih alanlarını düzelt
@@ -46,9 +47,8 @@ export class CustomerService {
 
   // ID'ye göre müşteri getir
   getCustomerById(id: number): Observable<Customer | undefined> {
-    console.log(`API çağrısı: GET ${this.apiUrl}/${id}`);
+    console.log(`Müşteri API'den getiriliyor, ID: ${id}`);
     return this.http.get<Customer>(`${this.apiUrl}/${id}`).pipe(
-      tap((response) => console.log('API yanıtı:', response)),
       map((customer) => ({
         ...customer,
         createdAt: new Date(customer.createdAt),
@@ -65,6 +65,7 @@ export class CustomerService {
 
   // Yeni müşteri ekle
   addCustomer(customer: Customer): Observable<Customer> {
+    console.log("Yeni müşteri API'ye ekleniyor:", customer);
     return this.http.post<Customer>(this.apiUrl, customer).pipe(
       map((newCustomer) => ({
         ...newCustomer,
@@ -85,6 +86,10 @@ export class CustomerService {
 
   // Müşteri güncelle
   updateCustomer(updatedCustomer: Customer): Observable<Customer> {
+    console.log(
+      `Müşteri API'de güncelleniyor, ID: ${updatedCustomer.id}`,
+      updatedCustomer
+    );
     return this.http
       .patch<Customer>(`${this.apiUrl}/${updatedCustomer.id}`, updatedCustomer)
       .pipe(
@@ -111,13 +116,11 @@ export class CustomerService {
 
   // Müşteri sil
   deleteCustomer(id: number): Observable<void> {
-    console.log(`API çağrısı: DELETE ${this.apiUrl}/${id}`);
+    console.log(`Müşteri API'den siliniyor, ID: ${id}`);
     return this.http.delete<void>(`${this.apiUrl}/${id}`).pipe(
       tap(() => {
-        console.log(`Müşteri silindi, ID: ${id}`);
-        // Müşteri listesini güncelle
         this.customers.update((customers) =>
-          customers.filter((customer) => customer.id !== id)
+          customers.filter((c) => c.id !== id)
         );
       }),
       catchError((error) => {

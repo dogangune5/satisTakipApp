@@ -302,17 +302,40 @@ export class PaymentFormComponent {
     this.route.queryParams.subscribe((queryParams) => {
       if (queryParams['orderId']) {
         const orderId = +queryParams['orderId'];
-        const order = this.orderService.getOrderById(orderId);
+        // Önce mevcut siparişlerde arayalım
+        const existingOrder = this.orders.find((o) => o.id === orderId);
 
-        if (order) {
+        if (existingOrder) {
+          // Eğer sipariş zaten yüklenmişse, doğrudan kullan
+          this.selectedOrder = existingOrder;
+
           this.paymentForm.patchValue({
             orderId,
-            customerId: order.customerId,
-            amount: this.calculateRemainingAmount(order),
+            customerId: existingOrder.customerId,
+            amount: this.calculateRemainingAmount(existingOrder),
           });
 
           this.onCustomerChange();
-          this.onOrderChange();
+        } else {
+          // Değilse API'den getir
+          this.orderService.getOrderById(orderId).subscribe({
+            next: (order) => {
+              if (!order) return;
+
+              this.selectedOrder = order;
+
+              this.paymentForm.patchValue({
+                orderId,
+                customerId: order.customerId,
+                amount: this.calculateRemainingAmount(order),
+              });
+
+              this.onCustomerChange();
+            },
+            error: (err) => {
+              console.error('Sipariş bilgileri alınırken hata oluştu:', err);
+            },
+          });
         }
       }
     });
@@ -379,17 +402,36 @@ export class PaymentFormComponent {
   }
 
   onOrderChange(): void {
-    const orderId = +this.paymentForm.get('orderId')?.value;
+    const orderId = this.paymentForm.get('orderId')?.value;
     if (orderId) {
-      const selectedOrder = this.orderService.getOrderById(orderId);
-      this.selectedOrder = selectedOrder || null;
+      // Önce mevcut siparişlerde arayalım
+      const existingOrder = this.orders.find((o) => o.id === +orderId);
 
-      // If not in edit mode, suggest the remaining amount to be paid
-      if (!this.isEditMode && this.selectedOrder) {
-        const remainingAmount = this.calculateRemainingAmount(
-          this.selectedOrder
-        );
-        this.paymentForm.get('amount')?.setValue(remainingAmount);
+      if (existingOrder) {
+        // Eğer sipariş zaten yüklenmişse, doğrudan kullan
+        this.selectedOrder = existingOrder;
+
+        this.paymentForm.patchValue({
+          customerId: existingOrder.customerId,
+          amount: this.calculateRemainingAmount(existingOrder),
+        });
+      } else {
+        // Değilse API'den getir
+        this.orderService.getOrderById(+orderId).subscribe({
+          next: (order) => {
+            if (!order) return;
+
+            this.selectedOrder = order;
+
+            this.paymentForm.patchValue({
+              customerId: order.customerId,
+              amount: this.calculateRemainingAmount(order),
+            });
+          },
+          error: (err) => {
+            console.error('Sipariş bilgileri alınırken hata oluştu:', err);
+          },
+        });
       }
     } else {
       this.selectedOrder = null;
@@ -417,22 +459,32 @@ export class PaymentFormComponent {
   onSubmit(): void {
     this.submitted = true;
 
-    if (this.paymentForm.invalid) {
+    if (!this.paymentForm.valid) {
+      console.error('Form geçerli değil:', this.paymentForm.errors);
+      // Hatalı alanları göster
+      Object.keys(this.paymentForm.controls).forEach((key) => {
+        const control = this.paymentForm.get(key);
+        if (control?.invalid) {
+          console.error(`Hatalı alan: ${key}`, control.errors);
+          control.markAsTouched();
+        }
+      });
       return;
     }
 
-    // Get form values
+    // Form verilerini al
     const formValues = this.paymentForm.value;
 
-    // Get customer name for display
+    // Müşteri adını görüntüleme için al
     const customer = this.customers.find(
       (c) => c.id === +formValues.customerId
     );
     const customerName = customer ? customer.companyName : '';
 
-    // Prepare payment data
+    // Ödeme verilerini hazırla
     const paymentData = {
       ...formValues,
+      id: this.paymentId,
       customerId: +formValues.customerId,
       customerName,
       orderId: formValues.orderId ? +formValues.orderId : undefined,
@@ -440,33 +492,97 @@ export class PaymentFormComponent {
       paymentDate: new Date(formValues.paymentDate),
     };
 
+    console.log('Ödeme verileri:', paymentData);
+
     if (this.isEditMode && this.paymentId) {
-      paymentData.id = this.paymentId;
-      this.paymentService.updatePayment(paymentData);
+      // Mevcut ödemeyi güncelle
+      console.log('Ödeme güncelleniyor:', paymentData);
+      this.paymentService.updatePayment(paymentData).subscribe({
+        next: (updated) => {
+          console.log('Ödeme güncellendi:', updated);
+
+          // Ödeme bir siparişe bağlıysa, sipariş ödeme durumunu güncelle
+          if (paymentData.orderId) {
+            this.updateOrderPaymentStatus(paymentData.orderId);
+          }
+
+          this.router.navigate(['/payments']);
+        },
+        error: (err) => {
+          console.error('Ödeme güncellenirken hata oluştu:', err);
+        },
+      });
     } else {
-      this.paymentService.addPayment(paymentData);
-    }
+      // Yeni ödeme ekle
+      console.log('Yeni ödeme ekleniyor:', paymentData);
+      this.paymentService.addPayment(paymentData).subscribe({
+        next: (added) => {
+          console.log('Ödeme eklendi:', added);
 
-    // If payment is linked to an order, update order payment status
-    if (paymentData.orderId) {
-      this.updateOrderPaymentStatus(paymentData.orderId);
-    }
+          // Ödeme bir siparişe bağlıysa, sipariş ödeme durumunu güncelle
+          if (paymentData.orderId) {
+            this.updateOrderPaymentStatus(paymentData.orderId);
+          }
 
-    this.router.navigate(['/payments']);
+          this.router.navigate(['/payments']);
+        },
+        error: (err) => {
+          console.error('Ödeme eklenirken hata oluştu:', err);
+        },
+      });
+    }
   }
 
   updateOrderPaymentStatus(orderId: number): void {
-    const order = this.orderService.getOrderById(orderId);
-    if (order) {
-      const newStatus = this.calculateOrderPaymentStatus(order);
-      const updatedOrder = { ...order, paymentStatus: newStatus };
-      this.orderService.updateOrder(updatedOrder);
+    // Önce mevcut siparişlerde var mı kontrol et
+    const existingOrder = this.orders.find((o) => o.id === orderId);
+    if (existingOrder) {
+      const newStatus = this.calculateOrderPaymentStatus(existingOrder);
+      const updatedOrder = {
+        ...existingOrder,
+        paymentStatus: newStatus,
+      };
+
+      this.orderService.updateOrder(updatedOrder as Order).subscribe({
+        next: () => {
+          console.log('Sipariş ödeme durumu güncellendi');
+        },
+        error: (err) => {
+          console.error('Sipariş ödeme durumu güncellenirken hata oluştu', err);
+        },
+      });
+    } else {
+      // Değilse API'den getir
+      this.orderService.getOrderById(orderId).subscribe({
+        next: (order) => {
+          if (order) {
+            const newStatus = this.calculateOrderPaymentStatus(order);
+            const updatedOrder = {
+              ...order,
+              paymentStatus: newStatus,
+            };
+
+            this.orderService.updateOrder(updatedOrder as Order).subscribe({
+              next: () => {
+                console.log('Sipariş ödeme durumu güncellendi');
+              },
+              error: (err) => {
+                console.error(
+                  'Sipariş ödeme durumu güncellenirken hata oluştu',
+                  err
+                );
+              },
+            });
+          }
+        },
+        error: (err) => {
+          console.error('Sipariş bilgileri alınırken hata oluştu', err);
+        },
+      });
     }
   }
 
-  private calculateOrderPaymentStatus(
-    order: Order
-  ): 'pending' | 'partial' | 'paid' {
+  calculateOrderPaymentStatus(order: Order): 'pending' | 'partial' | 'paid' {
     const payments = this.paymentService.getPaymentsByOrderId(order.id || 0);
     if (!payments.length) return 'pending';
 

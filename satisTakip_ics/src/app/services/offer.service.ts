@@ -1,147 +1,162 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { Offer } from '../models';
+import { environment } from '../../environments/environment';
+import { catchError, map, tap } from 'rxjs/operators';
+import { Observable, of, throwError } from 'rxjs';
 
 @Injectable({
   providedIn: 'root',
 })
 export class OfferService {
-  private offers = signal<Offer[]>([
-    {
-      id: 1,
-      offerNumber: 'TKL-2023-001',
-      customerId: 1,
-      customerName: 'Yılmaz Teknoloji A.Ş.',
-      title: 'ERP Sistemi Teklifi',
-      description: 'Şirket içi süreçleri yönetmek için ERP sistemi teklifi',
-      items: [
-        {
-          id: 1,
-          productName: 'ERP Temel Modül',
-          quantity: 1,
-          unitPrice: 100000,
-          discount: 10,
-          tax: 18,
-          total: 90000,
-          description: 'Temel ERP modülü lisansı',
-        },
-        {
-          id: 2,
-          productName: 'Finans Modülü',
-          quantity: 1,
-          unitPrice: 50000,
-          discount: 5,
-          tax: 18,
-          total: 47500,
-          description: 'Finans yönetim modülü',
-        },
-        {
-          id: 3,
-          productName: 'İnsan Kaynakları Modülü',
-          quantity: 1,
-          unitPrice: 60000,
-          discount: 5,
-          tax: 18,
-          total: 57000,
-          description: 'İK yönetim modülü',
-        },
-      ],
-      totalAmount: 194500,
-      status: 'sent',
-      validUntil: new Date('2023-07-30'),
-      createdAt: new Date('2023-05-15'),
-      notes: 'Müşteri ile görüşüldü, olumlu dönüş bekleniyor',
-      terms: 'Ödeme 30 gün içinde yapılmalıdır',
-      opportunityId: 1,
-    },
-    {
-      id: 2,
-      offerNumber: 'TKL-2023-002',
-      customerId: 2,
-      customerName: 'Demir İnşaat Ltd. Şti.',
-      title: 'Mobil Uygulama Geliştirme Teklifi',
-      description: 'Saha ekibi için mobil takip uygulaması geliştirme teklifi',
-      items: [
-        {
-          id: 1,
-          productName: 'Mobil Uygulama Geliştirme',
-          quantity: 1,
-          unitPrice: 80000,
-          tax: 18,
-          total: 80000,
-          description: 'Android ve iOS platformları için uygulama geliştirme',
-        },
-        {
-          id: 2,
-          productName: 'Bulut Altyapı Kurulumu',
-          quantity: 1,
-          unitPrice: 40000,
-          tax: 18,
-          total: 40000,
-          description: 'Uygulama için bulut altyapı kurulumu ve yapılandırması',
-        },
-      ],
-      totalAmount: 120000,
-      status: 'draft',
-      validUntil: new Date('2023-08-15'),
-      createdAt: new Date('2023-05-20'),
-      opportunityId: 2,
-    },
-  ]);
+  private http = inject(HttpClient);
+  private apiUrl = `${environment.apiUrl}/offers`;
 
+  // Teklif verilerini tutan signal
+  private offers = signal<Offer[]>([]);
+
+  // Tüm teklifleri getir
   getOffers() {
+    this.fetchOffers().subscribe();
     return this.offers;
   }
 
-  getOfferById(id: number) {
-    return this.offers().find((offer) => offer.id === id);
-  }
-
-  getOffersByCustomerId(customerId: number) {
-    return this.offers().filter((offer) => offer.customerId === customerId);
-  }
-
-  addOffer(offer: Offer) {
-    const newOffer = {
-      ...offer,
-      id: this.generateId(),
-      offerNumber: this.generateOfferNumber(),
-      createdAt: new Date(),
-    };
-
-    this.offers.update((offers) => [...offers, newOffer]);
-    return newOffer;
-  }
-
-  updateOffer(updatedOffer: Offer) {
-    this.offers.update((offers) =>
-      offers.map((offer) =>
-        offer.id === updatedOffer.id
-          ? { ...updatedOffer, updatedAt: new Date() }
-          : offer
-      )
+  // Teklifleri API'den çek
+  fetchOffers(): Observable<Offer[]> {
+    console.log('Teklifler API\'den getiriliyor...');
+    return this.http.get<Offer[]>(this.apiUrl).pipe(
+      tap((offers) => {
+        // Tarih alanlarını düzelt
+        const formattedOffers = offers.map((offer) => ({
+          ...offer,
+          validUntil: new Date(offer.validUntil),
+          createdAt: new Date(offer.createdAt),
+          updatedAt: offer.updatedAt ? new Date(offer.updatedAt) : undefined,
+        }));
+        this.offers.set(formattedOffers);
+      }),
+      catchError((error) => {
+        console.error('Teklifler getirilirken hata oluştu', error);
+        // Hata durumunda boş dizi döndür
+        this.offers.set([]);
+        return of([]);
+      })
     );
   }
 
-  deleteOffer(id: number) {
-    this.offers.update((offers) => offers.filter((offer) => offer.id !== id));
+  // ID'ye göre teklif getir
+  getOfferById(id: number): Observable<Offer | undefined> {
+    console.log(`Teklif API'den getiriliyor, ID: ${id}`);
+    return this.http.get<Offer>(`${this.apiUrl}/${id}`).pipe(
+      map((offer) => ({
+        ...offer,
+        validUntil: new Date(offer.validUntil),
+        createdAt: new Date(offer.createdAt),
+        updatedAt: offer.updatedAt ? new Date(offer.updatedAt) : undefined,
+      })),
+      catchError((error) => {
+        console.error(`Teklif ID:${id} getirilirken hata oluştu`, error);
+        return of(undefined);
+      })
+    );
   }
 
-  private generateId(): number {
-    const offers = this.offers();
-    return offers.length > 0
-      ? Math.max(...offers.map((offer) => offer.id || 0)) + 1
-      : 1;
+  // Müşteri ID'sine göre teklifleri getir
+  getOffersByCustomerId(customerId: number): Observable<Offer[]> {
+    console.log(`Müşteriye ait teklifler API'den getiriliyor, Müşteri ID: ${customerId}`);
+    return this.http.get<Offer[]>(`${this.apiUrl}?customerId=${customerId}`).pipe(
+      map((offers) => offers.map(offer => ({
+        ...offer,
+        validUntil: new Date(offer.validUntil),
+        createdAt: new Date(offer.createdAt),
+        updatedAt: offer.updatedAt ? new Date(offer.updatedAt) : undefined,
+      }))),
+      catchError((error) => {
+        console.error(`Müşteri ID:${customerId} için teklifler getirilirken hata oluştu`, error);
+        return of([]);
+      })
+    );
   }
 
-  private generateOfferNumber(): string {
-    const offers = this.offers();
-    const year = new Date().getFullYear();
-    const lastOfferNumber =
-      offers
-        .filter((offer) => offer.offerNumber.includes(`TKL-${year}`))
-        .map((offer) => parseInt(offer.offerNumber.split('-')[2]))
-        .sort((a, b) => b - a)[0] || 0;
+  // Fırsat ID'sine göre teklifleri getir
+  getOffersByOpportunityId(opportunityId: number): Observable<Offer[]> {
+    console.log(`Fırsata ait teklifler API'den getiriliyor, Fırsat ID: ${opportunityId}`);
+    return this.http.get<Offer[]>(`${this.apiUrl}?opportunityId=${opportunityId}`).pipe(
+      map((offers) => offers.map(offer => ({
+        ...offer,
+        validUntil: new Date(offer.validUntil),
+        createdAt: new Date(offer.createdAt),
+        updatedAt: offer.updatedAt ? new Date(offer.updatedAt) : undefined,
+      }))),
+      catchError((error) => {
+        console.error(`Fırsat ID:${opportunityId} için teklifler getirilirken hata oluştu`, error);
+        return of([]);
+      })
+    );
+  }
 
-    return `TKL-${year}-${(lastOfferNumber + 1).toString().padStart(3, '0')}`;
+  // Yeni teklif ekle
+  addOffer(offer: Offer): Observable<Offer> {
+    console.log('Yeni teklif API\'ye ekleniyor:', offer);
+    return this.http.post<Offer>(this.apiUrl, offer).pipe(
+      map((newOffer) => ({
+        ...newOffer,
+        validUntil: new Date(newOffer.validUntil),
+        createdAt: new Date(newOffer.createdAt),
+        updatedAt: newOffer.updatedAt ? new Date(newOffer.updatedAt) : undefined,
+      })),
+      tap((newOffer) => {
+        this.offers.update((offers) => [...offers, newOffer]);
+      }),
+      catchError((error) => {
+        console.error('Teklif eklenirken hata oluştu', error);
+        return throwError(() => new Error('Teklif eklenirken hata oluştu'));
+      })
+    );
+  }
+
+  // Teklif güncelle
+  updateOffer(updatedOffer: Offer): Observable<Offer> {
+    console.log(
+      `Teklif API'de güncelleniyor, ID: ${updatedOffer.id}`,
+      updatedOffer
+    );
+    return this.http
+      .patch<Offer>(`${this.apiUrl}/${updatedOffer.id}`, updatedOffer)
+      .pipe(
+        map((offer) => ({
+          ...offer,
+          validUntil: new Date(offer.validUntil),
+          createdAt: new Date(offer.createdAt),
+          updatedAt: offer.updatedAt ? new Date(offer.updatedAt) : undefined,
+        })),
+        tap((offer) => {
+          this.offers.update((offers) =>
+            offers.map((o) => (o.id === offer.id ? offer : o))
+          );
+        }),
+        catchError((error) => {
+          console.error('Teklif güncellenirken hata oluştu', error);
+          return throwError(
+            () => new Error('Teklif güncellenirken hata oluştu')
+          );
+        })
+      );
+  }
+
+  // Teklif sil
+  deleteOffer(id: number): Observable<void> {
+    console.log(`Teklif API'den siliniyor, ID: ${id}`);
+    return this.http.delete<void>(`${this.apiUrl}/${id}`).pipe(
+      tap(() => {
+        this.offers.update((offers) =>
+          offers.filter((offer) => offer.id !== id)
+        );
+      }),
+      catchError((error) => {
+        console.error('Teklif silinirken hata oluştu', error);
+        return throwError(() => new Error('Teklif silinirken hata oluştu'));
+      })
+    );
   }
 }

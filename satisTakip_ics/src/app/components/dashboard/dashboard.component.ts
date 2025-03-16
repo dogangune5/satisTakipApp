@@ -413,29 +413,41 @@ export class DashboardComponent {
   // Recent items
   recentOpportunities = [...this.opportunities]
     .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      (a, b) => {
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
     )
     .slice(0, 5);
 
   recentOrders = [...this.orders]
     .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      (a, b) => {
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
     )
     .slice(0, 5);
 
   recentOffers = [...this.offers]
     .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      (a, b) => {
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
     )
     .slice(0, 5);
 
   recentPayments = [...this.payments]
     .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      (a, b) => {
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
     )
     .slice(0, 5);
 
@@ -487,4 +499,8 @@ export class DashboardComponent {
         .reduce((sum, o) => sum + o.value, 0),
     },
   ];
+
+  constructor() {
+    // Diğer işlemler burada olabilir
+  }
 }

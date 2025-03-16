@@ -20,14 +20,16 @@ import { NgClass } from '@angular/common';
   ],
 })
 export class StatusBadgeComponent {
-  @Input() status = '';
+  @Input() status: string | undefined = '';
   @Input() type: 'customer' | 'opportunity' | 'offer' | 'order' | 'payment' =
     'customer';
 
   get text(): string {
+    const currentStatus = this.status || '';
+
     switch (this.type) {
       case 'customer':
-        switch (this.status) {
+        switch (currentStatus) {
           case 'active':
             return 'Aktif';
           case 'inactive':
@@ -35,10 +37,10 @@ export class StatusBadgeComponent {
           case 'lead':
             return 'Potansiyel';
           default:
-            return this.status;
+            return currentStatus;
         }
       case 'opportunity':
-        switch (this.status) {
+        switch (currentStatus) {
           case 'new':
             return 'Yeni';
           case 'qualified':
@@ -52,10 +54,10 @@ export class StatusBadgeComponent {
           case 'closed-lost':
             return 'Kaybedildi';
           default:
-            return this.status;
+            return currentStatus;
         }
       case 'offer':
-        switch (this.status) {
+        switch (currentStatus) {
           case 'draft':
             return 'Taslak';
           case 'sent':
@@ -66,11 +68,13 @@ export class StatusBadgeComponent {
             return 'Reddedildi';
           case 'expired':
             return 'Süresi Doldu';
+          case 'pending':
+            return 'Beklemede';
           default:
-            return this.status;
+            return currentStatus;
         }
       case 'order':
-        switch (this.status) {
+        switch (currentStatus) {
           case 'new':
             return 'Yeni';
           case 'processing':
@@ -82,10 +86,10 @@ export class StatusBadgeComponent {
           case 'cancelled':
             return 'İptal Edildi';
           default:
-            return this.status;
+            return currentStatus;
         }
       case 'payment':
-        switch (this.status) {
+        switch (currentStatus) {
           case 'pending':
             return 'Bekliyor';
           case 'completed':
@@ -95,17 +99,19 @@ export class StatusBadgeComponent {
           case 'refunded':
             return 'İade Edildi';
           default:
-            return this.status;
+            return currentStatus;
         }
       default:
-        return this.status;
+        return currentStatus;
     }
   }
 
   get badgeClass(): string {
+    const currentStatus = this.status || '';
+
     switch (this.type) {
       case 'customer':
-        switch (this.status) {
+        switch (currentStatus) {
           case 'active':
             return 'bg-success';
           case 'inactive':
@@ -116,7 +122,7 @@ export class StatusBadgeComponent {
             return 'bg-primary';
         }
       case 'opportunity':
-        switch (this.status) {
+        switch (currentStatus) {
           case 'new':
             return 'bg-info';
           case 'qualified':
@@ -133,7 +139,7 @@ export class StatusBadgeComponent {
             return 'bg-primary';
         }
       case 'offer':
-        switch (this.status) {
+        switch (currentStatus) {
           case 'draft':
             return 'bg-secondary';
           case 'sent':
@@ -144,11 +150,13 @@ export class StatusBadgeComponent {
             return 'bg-danger';
           case 'expired':
             return 'bg-dark';
+          case 'pending':
+            return 'bg-warning text-dark';
           default:
             return 'bg-primary';
         }
       case 'order':
-        switch (this.status) {
+        switch (currentStatus) {
           case 'new':
             return 'bg-info';
           case 'processing':
@@ -163,7 +171,7 @@ export class StatusBadgeComponent {
             return 'bg-primary';
         }
       case 'payment':
-        switch (this.status) {
+        switch (currentStatus) {
           case 'pending':
             return 'bg-warning text-dark';
           case 'completed':

@@ -27,11 +27,11 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
     <div class="container">
       <app-page-header
         title="Müşteri Detayları"
-        [subtitle]="customer?.companyName || ''"
+        [subtitle]="customer ? customer.companyName || 'İsimsiz Müşteri' : ''"
       >
         <div class="btn-group">
           <a
-            [routerLink]="['/customers', customer?.id, 'edit']"
+            [routerLink]="['/customers', customer ? customer.id : '', 'edit']"
             class="btn btn-outline-primary"
           >
             <i class="bi bi-pencil me-1"></i> Düzenle
@@ -51,7 +51,10 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
                 class="d-flex justify-content-between align-items-center mb-3"
               >
                 <h5 class="card-title mb-0">Firma Bilgileri</h5>
-                <app-status-badge [status]="customer.status" type="customer">
+                <app-status-badge
+                  [status]="customer.status || 'active'"
+                  type="customer"
+                >
                 </app-status-badge>
               </div>
               <hr />
@@ -356,11 +359,14 @@ export class CustomerDetailComponent {
   private orderService = inject(OrderService);
   private paymentService = inject(PaymentService);
 
-  customer: Customer | undefined;
+  customer: Customer | null = null;
   opportunities = this.opportunityService.getOpportunities()();
   offers = this.offerService.getOffers()();
   orders = this.orderService.getOrders()();
   payments = this.paymentService.getPayments()();
+  relatedOpportunities: any[] = [];
+  relatedOffers: any[] = [];
+  relatedOrders: any[] = [];
 
   constructor() {
     this.route.params.subscribe((params) => {
@@ -372,31 +378,62 @@ export class CustomerDetailComponent {
   }
 
   loadCustomerData(customerId: number): void {
+    console.log(`Müşteri bilgileri yükleniyor, ID: ${customerId}`);
     this.customerService.getCustomerById(customerId).subscribe({
       next: (customer) => {
         if (customer) {
           this.customer = customer;
-          this.opportunityService
-            .getOpportunitiesByCustomerId(customerId)
-            .subscribe({
-              next: (opportunities) => {
-                this.opportunities = opportunities;
-              },
-              error: (err) => {
-                console.error('Fırsatlar yüklenirken hata oluştu:', err);
-                this.opportunities = [];
-              },
-            });
-          this.offers = this.offerService.getOffersByCustomerId(customerId);
+          console.log('Müşteri bilgileri yüklendi:', this.customer);
+          // Get related opportunities
+          const allOpportunities = this.opportunityService.getOpportunities()();
+          this.relatedOpportunities = allOpportunities.filter(
+            (opportunity) => opportunity.customerId === customerId
+          );
+
+          // Get related offers
+          const allOffers = this.offerService.getOffers()();
+          this.relatedOffers = allOffers.filter(
+            (offer) => offer.customerId === customerId
+          );
+
+          // Get related orders
+          const allOrders = this.orderService.getOrders()();
+          this.relatedOrders = allOrders.filter(
+            (order) => order.customerId === customerId
+          );
+        } else {
+          console.error('Müşteri bulunamadı');
+          this.router.navigate(['/customers']);
         }
       },
       error: (err) => {
         console.error('Müşteri yüklenirken hata oluştu:', err);
+        this.router.navigate(['/customers']);
       },
     });
   }
 
   navigateTo(path: string): void {
     this.router.navigate([path]);
+  }
+
+  updateStatus(status: 'active' | 'inactive' | 'lead'): void {
+    if (this.customer) {
+      const updatedCustomer = {
+        ...this.customer,
+        status,
+      };
+
+      console.log('Müşteri durumu güncelleniyor:', status);
+      this.customerService.updateCustomer(updatedCustomer).subscribe({
+        next: (updated) => {
+          console.log('Müşteri durumu güncellendi:', updated);
+          this.customer = updated;
+        },
+        error: (err) => {
+          console.error('Müşteri durumu güncellenirken hata oluştu:', err);
+        },
+      });
+    }
   }
 }

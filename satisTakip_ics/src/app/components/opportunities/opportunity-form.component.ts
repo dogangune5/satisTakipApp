@@ -302,7 +302,7 @@ export class OpportunityFormComponent {
       if (params['id'] && params['id'] !== 'new') {
         this.isEditMode = true;
         this.opportunityId = +params['id'];
-        this.loadOpportunityData();
+        this.loadOpportunityData(this.opportunityId);
       }
     });
   }
@@ -331,103 +331,117 @@ export class OpportunityFormComponent {
     });
   }
 
-  loadOpportunityData(): void {
-    if (this.opportunityId) {
-      console.log(`Fırsat bilgileri yükleniyor, ID: ${this.opportunityId}`);
-      this.opportunityService.getOpportunityById(this.opportunityId).subscribe({
-        next: (opportunity) => {
-          if (opportunity) {
-            console.log('Fırsat bilgileri yüklendi:', opportunity);
+  loadOpportunityData(opportunityId: number): void {
+    console.log(`Fırsat bilgileri yükleniyor, ID: ${opportunityId}`);
+    this.opportunityService.getOpportunityById(opportunityId).subscribe({
+      next: (opportunity) => {
+        if (opportunity) {
+          console.log('Fırsat bilgileri yüklendi:', opportunity);
 
-            // Format date for input type="date"
-            const expectedCloseDate = opportunity.expectedCloseDate
-              ? this.formatDateForInput(opportunity.expectedCloseDate)
-              : '';
+          // Format the expected close date for the input field
+          const expectedCloseDate = opportunity.expectedCloseDate
+            ? new Date(opportunity.expectedCloseDate)
+                .toISOString()
+                .split('T')[0]
+            : '';
 
-            // Format products array to string
-            const productsString = opportunity.products
+          this.opportunityForm.patchValue({
+            title: opportunity.title,
+            customerId: opportunity.customerId,
+            description: opportunity.description,
+            value: opportunity.value,
+            status: opportunity.status,
+            probability: opportunity.probability,
+            expectedCloseDate: expectedCloseDate,
+            assignedTo: opportunity.assignedTo,
+            products: opportunity.products
               ? opportunity.products.join('\n')
-              : '';
-
-            // Form alanlarını fırsat verileriyle doldur
-            this.opportunityForm.patchValue({
-              title: opportunity.title,
-              customerId: opportunity.customerId,
-              description: opportunity.description,
-              value: opportunity.value,
-              status: opportunity.status,
-              probability: opportunity.probability,
-              expectedCloseDate: expectedCloseDate,
-              assignedTo: opportunity.assignedTo,
-              products: productsString,
-              notes: opportunity.notes,
-              source: opportunity.source,
-              priority: opportunity.priority || 'medium',
-            });
-          } else {
-            console.error('Fırsat bulunamadı');
-            this.router.navigate(['/opportunities']);
-          }
-        },
-        error: (err) => {
-          console.error('Fırsat yüklenirken hata oluştu:', err);
+              : '',
+            notes: opportunity.notes,
+            source: opportunity.source,
+            priority: opportunity.priority || 'medium',
+          });
+        } else {
+          console.error('Fırsat bulunamadı');
           this.router.navigate(['/opportunities']);
-        },
-      });
-    }
+        }
+      },
+      error: (err) => {
+        console.error('Fırsat yüklenirken hata oluştu:', err);
+        this.router.navigate(['/opportunities']);
+      },
+    });
   }
 
   onSubmit(): void {
     this.submitted = true;
 
     if (this.opportunityForm.invalid) {
+      console.error('Form geçersiz:', this.opportunityForm.errors);
+
+      // Hatalı alanları göster
+      Object.keys(this.opportunityForm.controls).forEach((key) => {
+        const control = this.opportunityForm.get(key);
+        if (control?.invalid) {
+          console.error(`Hatalı alan: ${key}`, control.errors);
+        }
+      });
+
       return;
     }
 
-    // Get form values
-    const formValues = this.opportunityForm.value;
+    const formData = this.opportunityForm.value;
+    const customerName =
+      this.customers.find((c) => c.id === +formData.customerId)?.companyName ||
+      'İsimsiz Müşteri';
 
-    // Convert products string to array
-    const products = formValues.products
-      ? formValues.products.split('\n').filter((p: string) => p.trim() !== '')
-      : [];
-
-    // Get customer name for display
-    const customer = this.customers.find(
-      (c) => c.id === +formValues.customerId
-    );
-    const customerName = customer ? customer.companyName : '';
-
-    // Prepare opportunity data
-    const opportunityData: Opportunity = {
-      ...formValues,
-      customerId: +formValues.customerId,
+    // Temel veri yapısını oluştur
+    const opportunityData = {
+      id: this.opportunityId || 0, // Güncelleme için gerekli, API'ye gönderilmeyecek
+      title: formData.title || '',
+      customerId: +formData.customerId,
       customerName,
-      products,
-      expectedCloseDate: new Date(formValues.expectedCloseDate),
+      description: formData.description || '',
+      value: +formData.value || 0,
+      status: formData.status || 'new',
+      probability: +formData.probability || 30,
+      expectedCloseDate: formData.expectedCloseDate
+        ? new Date(formData.expectedCloseDate)
+        : new Date(),
+      assignedTo: formData.assignedTo || '',
+      products: formData.products
+        ? formData.products.split('\n').filter(Boolean)
+        : [],
+      priority: formData.priority || 'medium',
+      source: formData.source || '',
+      notes: formData.notes || '',
     };
 
-    if (this.isEditMode && this.opportunityId) {
-      opportunityData.id = this.opportunityId;
+    if (this.opportunityId) {
+      // Update existing opportunity
       console.log('Fırsat güncelleniyor:', opportunityData);
+
       this.opportunityService.updateOpportunity(opportunityData).subscribe({
-        next: (updatedOpportunity) => {
-          console.log('Fırsat başarıyla güncellendi:', updatedOpportunity);
-          this.router.navigate(['/opportunities']);
+        next: (updated) => {
+          console.log('Fırsat güncellendi:', updated);
+          this.router.navigate(['/opportunities', this.opportunityId]);
         },
         error: (err) => {
           console.error('Fırsat güncellenirken hata oluştu:', err);
+          alert(`Fırsat güncellenirken bir hata oluştu: ${err.message}`);
         },
       });
     } else {
+      // Add new opportunity
       console.log('Yeni fırsat ekleniyor:', opportunityData);
       this.opportunityService.addOpportunity(opportunityData).subscribe({
-        next: (newOpportunity) => {
-          console.log('Fırsat başarıyla eklendi:', newOpportunity);
+        next: (added) => {
+          console.log('Fırsat eklendi:', added);
           this.router.navigate(['/opportunities']);
         },
         error: (err) => {
           console.error('Fırsat eklenirken hata oluştu:', err);
+          alert(`Fırsat eklenirken bir hata oluştu: ${err.message}`);
         },
       });
     }
@@ -435,17 +449,5 @@ export class OpportunityFormComponent {
 
   goBack(): void {
     this.location.back();
-  }
-
-  private formatDateForInput(date: Date): string {
-    const d = new Date(date);
-    let month = '' + (d.getMonth() + 1);
-    let day = '' + d.getDate();
-    const year = d.getFullYear();
-
-    if (month.length < 2) month = '0' + month;
-    if (day.length < 2) day = '0' + day;
-
-    return [year, month, day].join('-');
   }
 }

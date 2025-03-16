@@ -16,11 +16,7 @@ import { PageHeaderComponent } from '../shared';
 @Component({
   selector: 'app-order-form',
   standalone: true,
-  imports: [
-    ReactiveFormsModule,
-    NgClass,
-    PageHeaderComponent,
-  ],
+  imports: [ReactiveFormsModule, NgClass, PageHeaderComponent],
   template: `
     <div class="container">
       <app-page-header
@@ -57,7 +53,7 @@ import { PageHeaderComponent } from '../shared';
                     <option value="">Müşteri Seçin</option>
                     @for (customer of customers; track customer.id) {
                     <option [value]="customer.id">
-                      {{ customer.companyName }}
+                      {{ customer.name }}
                     </option>
                     }
                   </select>
@@ -379,23 +375,69 @@ export class OrderFormComponent {
 
   constructor() {
     this.initForm();
-    this.customers = this.customerService.getCustomers()();
-    this.offers = this.offerService.getOffers()();
+    this.loadData();
 
     this.route.params.subscribe((params) => {
       if (params['id'] && params['id'] !== 'new') {
         this.isEditMode = true;
         this.orderId = +params['id'];
-        this.loadOrderData();
+        this.loadOrderData(this.orderId);
       }
     });
 
     this.route.queryParams.subscribe((queryParams) => {
       if (queryParams['offerId']) {
         const offerId = +queryParams['offerId'];
-        const offer = this.offerService.getOfferById(offerId);
+        this.handleOfferSelection(offerId);
+      }
+    });
+  }
 
-        if (offer) {
+  loadData(): void {
+    // Müşterileri yükle
+    this.customerService.fetchCustomers().subscribe({
+      next: (customers) => {
+        this.customers = customers;
+        console.log('Müşteriler yüklendi:', this.customers);
+      },
+      error: (err) => console.error('Müşteriler yüklenirken hata oluştu:', err)
+    });
+
+    // Teklifleri yükle
+    this.offerService.fetchOffers().subscribe({
+      next: (offers) => {
+        this.offers = offers;
+        console.log('Teklifler yüklendi:', this.offers);
+        
+        // URL'den gelen teklif ID'si varsa işle
+        const offerId = this.route.snapshot.queryParams['offerId'];
+        if (offerId) {
+          this.handleOfferSelection(+offerId);
+        }
+      },
+      error: (err) => console.error('Teklifler yüklenirken hata oluştu:', err)
+    });
+  }
+
+  handleOfferSelection(offerId: number): void {
+    // Önce mevcut tekliflerde arayalım
+    const existingOffer = this.offers.find((o) => o.id === offerId);
+
+    if (existingOffer) {
+      // Eğer teklif zaten yüklenmişse, doğrudan kullan
+      this.orderForm.patchValue({
+        offerId,
+        customerId: existingOffer.customerId,
+      });
+
+      this.onCustomerChange();
+      this.populateItemsFromOffer(existingOffer);
+    } else {
+      // Değilse API'den getir
+      this.offerService.getOfferById(offerId).subscribe({
+        next: (offer) => {
+          if (!offer) return;
+
           this.orderForm.patchValue({
             offerId,
             customerId: offer.customerId,
@@ -403,9 +445,12 @@ export class OrderFormComponent {
 
           this.onCustomerChange();
           this.populateItemsFromOffer(offer);
-        }
-      }
-    });
+        },
+        error: (err) => {
+          console.error('Teklif bilgileri alınırken hata oluştu:', err);
+        },
+      });
+    }
   }
 
   get f() {
@@ -419,6 +464,7 @@ export class OrderFormComponent {
   initForm(): void {
     this.orderForm = this.fb.group({
       customerId: ['', Validators.required],
+      customerName: [''],
       items: this.fb.array([this.createItem()]),
       totalAmount: [0],
       status: ['new', Validators.required],
@@ -444,8 +490,27 @@ export class OrderFormComponent {
     });
   }
 
-  addItem(): void {
-    this.items.push(this.createItem());
+  addItem(item?: any): void {
+    this.items.push(
+      this.fb.group({
+        id: [item?.id || null],
+        productName: [item?.productName || '', Validators.required],
+        quantity: [
+          item?.quantity || 1,
+          [Validators.required, Validators.min(1)],
+        ],
+        unitPrice: [
+          item?.unitPrice || 0,
+          [Validators.required, Validators.min(0)],
+        ],
+        discount: [item?.discount || 0],
+        tax: [item?.tax || 18],
+        total: [item?.total || 0],
+        description: [item?.description || ''],
+      })
+    );
+
+    this.calculateTotalAmount();
   }
 
   removeItem(index: number): void {
@@ -482,81 +547,83 @@ export class OrderFormComponent {
     this.orderForm.get('totalAmount')?.setValue(parseFloat(total.toFixed(2)));
   }
 
-  loadOrderData(): void {
-    if (this.orderId) {
-      const order = this.orderService.getOrderById(this.orderId);
-      if (order) {
-        // Clear existing items
-        while (this.items.length) {
-          this.items.removeAt(0);
+  loadOrderData(orderId: number): void {
+    console.log(`Sipariş bilgileri yükleniyor, ID: ${orderId}`);
+    this.orderService.getOrderById(orderId).subscribe({
+      next: (order) => {
+        if (order) {
+          console.log('Sipariş bilgileri yüklendi:', order);
+
+          // Clear existing items
+          while (this.items.length > 0) {
+            this.items.removeAt(0);
+          }
+
+          // Add items from the order
+          if (order.items && order.items.length > 0) {
+            order.items.forEach((item) => {
+              this.addItem(item);
+            });
+          }
+
+          // Format dates for input fields
+          const orderDate = order.orderDate
+            ? this.formatDateForInput(new Date(order.orderDate))
+            : '';
+
+          const deliveryDate = order.deliveryDate
+            ? this.formatDateForInput(new Date(order.deliveryDate))
+            : '';
+
+          // Patch form values
+          this.orderForm.patchValue({
+            orderNumber: order.orderNumber,
+            customerId: order.customerId,
+            customerName: order.customerName,
+            offerId: order.offerId,
+            status: order.status,
+            orderDate: orderDate,
+            deliveryDate: deliveryDate,
+            shippingAddress: order.shippingAddress,
+            billingAddress: order.billingAddress,
+            paymentStatus: order.paymentStatus,
+            notes: order.notes,
+          });
+
+          // Müşteri değişikliğini tetikle
+          this.onCustomerChange();
+
+          // Calculate total amount
+          this.calculateTotalAmount();
+        } else {
+          console.error('Sipariş bulunamadı');
+          this.router.navigate(['/orders']);
         }
-
-        // Add order items
-        order.items.forEach((item) => {
-          this.items.push(
-            this.fb.group({
-              productName: [item.productName, Validators.required],
-              quantity: [
-                item.quantity,
-                [Validators.required, Validators.min(1)],
-              ],
-              unitPrice: [
-                item.unitPrice,
-                [Validators.required, Validators.min(0)],
-              ],
-              discount: [item.discount || 0],
-              tax: [item.tax || 18],
-              total: [item.total],
-              description: [item.description || ''],
-            })
-          );
-        });
-
-        // Format dates for input type="date"
-        const orderDate = order.orderDate
-          ? this.formatDateForInput(order.orderDate)
-          : '';
-
-        const deliveryDate = order.deliveryDate
-          ? this.formatDateForInput(order.deliveryDate)
-          : '';
-
-        // Set other form values
-        this.orderForm.patchValue({
-          customerId: order.customerId,
-          totalAmount: order.totalAmount,
-          status: order.status,
-          paymentStatus: order.paymentStatus,
-          orderDate,
-          deliveryDate,
-          notes: order.notes,
-          shippingAddress: order.shippingAddress,
-          billingAddress: order.billingAddress,
-          offerId: order.offerId,
-        });
-
-        this.onCustomerChange();
-      } else {
+      },
+      error: (err) => {
+        console.error('Sipariş yüklenirken hata oluştu:', err);
         this.router.navigate(['/orders']);
-      }
-    }
+      },
+    });
   }
 
   onCustomerChange(): void {
     const customerId = +this.orderForm.get('customerId')?.value;
     if (customerId) {
+      // Tüm teklifleri filtrele, sadece seçilen müşteriye ait olanları göster
       this.filteredOffers = this.offers.filter(
-        (offer) =>
-          offer.customerId === customerId && offer.status === 'accepted'
+        (offer) => offer.customerId === customerId
       );
+
+      console.log('Filtrelenmiş teklifler:', this.filteredOffers);
 
       // Auto-fill addresses from customer data
       const customer = this.customers.find((c) => c.id === customerId);
       if (customer && !this.isEditMode) {
-        const address = `${customer.address}, ${customer.city}, ${customer.country}`;
         this.orderForm.patchValue({
-          shippingAddress: address,
-          billingAddress: address,
+          customerName: customer.name,
+          shippingAddress: customer.address,
+          billingAddress: customer.address,
         });
       }
     } else {
@@ -565,78 +632,145 @@ export class OrderFormComponent {
   }
 
   onOfferChange(): void {
-    const offerId = +this.orderForm.get('offerId')?.value;
-    if (offerId) {
-      const offer = this.offerService.getOfferById(offerId);
-      if (offer) {
-        this.populateItemsFromOffer(offer);
-      }
+    const offerId = this.orderForm.get('offerId')?.value;
+    if (!offerId) return;
+    
+    console.log(`Teklif değişti, ID: ${offerId}`);
+    
+    // Önce mevcut tekliflerde arayalım
+    const existingOffer = this.offers.find((o) => o.id === +offerId);
+
+    if (existingOffer) {
+      console.log('Teklif bulundu:', existingOffer);
+      // Eğer teklif zaten yüklenmişse, doğrudan kullan
+      this.orderForm.patchValue({
+        customerId: existingOffer.customerId,
+        customerName: existingOffer.customerName,
+      });
+
+      this.populateItemsFromOffer(existingOffer);
+      this.calculateTotalAmount();
+    } else {
+      // Değilse API'den getir
+      this.offerService.getOfferById(+offerId).subscribe({
+        next: (offer) => {
+          if (!offer) {
+            console.log('Teklif bulunamadı');
+            return;
+          }
+          
+          console.log('Teklif API\'den alındı:', offer);
+          this.orderForm.patchValue({
+            customerId: offer.customerId,
+            customerName: offer.customerName,
+          });
+
+          this.populateItemsFromOffer(offer);
+          this.calculateTotalAmount();
+        },
+        error: (err) => {
+          console.error('Teklif bilgileri alınırken hata oluştu:', err);
+        },
+      });
     }
   }
 
   populateItemsFromOffer(offer: Offer): void {
-    // Clear existing items
-    while (this.items.length) {
+    console.log('Teklif öğeleri yükleniyor:', offer.items);
+    
+    // Mevcut öğeleri temizle
+    while (this.items.length > 0) {
       this.items.removeAt(0);
     }
 
-    // Add offer items
-    offer.items.forEach((item) => {
-      this.items.push(
-        this.fb.group({
-          productName: [item.productName, Validators.required],
-          quantity: [item.quantity, [Validators.required, Validators.min(1)]],
-          unitPrice: [item.unitPrice, [Validators.required, Validators.min(0)]],
-          discount: [item.discount || 0],
-          tax: [item.tax || 18],
-          total: [item.total],
-          description: [item.description || ''],
-        })
-      );
-    });
-
-    // Set total amount
+    // Teklifteki öğeleri ekle
+    if (offer.items && offer.items.length > 0) {
+      offer.items.forEach((item) => {
+        this.addItem(item);
+      });
+    } else {
+      // Eğer teklif öğeleri yoksa, boş bir öğe ekle
+      this.addItem();
+    }
+    
+    // Toplam tutarı güncelle
     this.orderForm.patchValue({
-      totalAmount: offer.totalAmount,
+      totalAmount: offer.totalAmount
     });
   }
 
   onSubmit(): void {
     this.submitted = true;
 
-    if (this.orderForm.invalid) {
+    if (!this.orderForm.valid) {
+      console.error('Form geçerli değil:', this.orderForm.errors);
+      // Hatalı alanları göster
+      Object.keys(this.orderForm.controls).forEach((key) => {
+        const control = this.orderForm.get(key);
+        if (control?.invalid) {
+          console.error(`Hatalı alan: ${key}`, control.errors);
+          control.markAsTouched();
+        }
+      });
       return;
     }
 
-    // Get form values
-    const formValues = this.orderForm.value;
+    // Form verilerini al
+    const formData = this.orderForm.value;
+    
+    // Müşteri adını al
+    const customer = this.customers.find(c => c.id === +formData.customerId);
+    const customerName = customer ? customer.name : formData.customerName;
 
-    // Get customer name for display
-    const customer = this.customers.find(
-      (c) => c.id === +formValues.customerId
-    );
-    const customerName = customer ? customer.companyName : '';
-
-    // Prepare order data
+    // Sipariş verilerini hazırla
     const orderData = {
-      ...formValues,
-      customerId: +formValues.customerId,
-      customerName,
-      orderDate: new Date(formValues.orderDate),
-      deliveryDate: formValues.deliveryDate
-        ? new Date(formValues.deliveryDate)
+      ...formData,
+      id: this.orderId,
+      customerId: +formData.customerId,
+      customerName: customerName,
+      offerId: formData.offerId ? +formData.offerId : undefined,
+      totalAmount: parseFloat(formData.totalAmount),
+      orderDate: formData.orderDate ? new Date(formData.orderDate) : new Date(),
+      deliveryDate: formData.deliveryDate
+        ? new Date(formData.deliveryDate)
         : undefined,
-      offerId: formValues.offerId ? +formValues.offerId : undefined,
+      items: formData.items.map((item: any) => ({
+        ...item,
+        quantity: +item.quantity,
+        unitPrice: +item.unitPrice,
+        discount: +item.discount,
+        tax: +item.tax,
+        total: +item.total,
+      })),
     };
 
-    if (this.isEditMode && this.orderId) {
-      orderData.id = this.orderId;
-      this.orderService.updateOrder(orderData);
-    } else {
-      this.orderService.addOrder(orderData);
-    }
+    console.log('Sipariş verileri:', orderData);
 
-    this.router.navigate(['/orders']);
+    if (this.isEditMode && this.orderId) {
+      // Mevcut siparişi güncelle
+      console.log('Sipariş güncelleniyor:', orderData);
+      this.orderService.updateOrder(orderData).subscribe({
+        next: (updated) => {
+          console.log('Sipariş güncellendi:', updated);
+          this.router.navigate(['/orders', this.orderId]);
+        },
+        error: (err) => {
+          console.error('Sipariş güncellenirken hata oluştu:', err);
+        },
+      });
+    } else {
+      // Yeni sipariş ekle
+      console.log('Yeni sipariş ekleniyor:', orderData);
+      this.orderService.addOrder(orderData).subscribe({
+        next: (added) => {
+          console.log('Sipariş eklendi:', added);
+          this.router.navigate(['/orders']);
+        },
+        error: (err) => {
+          console.error('Sipariş eklenirken hata oluştu:', err);
+        },
+      });
+    }
   }
 
   goBack(): void {

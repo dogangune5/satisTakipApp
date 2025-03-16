@@ -20,18 +20,23 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
   template: `
     <div class="container">
       <app-page-header
-        [title]="'Ödeme Detayı'"
-        [subtitle]="'Ödeme No: ' + (payment?.id || '')"
+        title="Ödeme Detayı"
+        [subtitle]="'Ödeme No: ' + (payment ? payment.id : '')"
       >
-        <button class="btn btn-outline-secondary me-2" routerLink="/payments">
-          <i class="bi bi-arrow-left me-1"></i> Geri
-        </button>
-        <button
-          class="btn btn-primary me-2"
-          [routerLink]="['/payments/edit', payment?.id]"
-        >
-          <i class="bi bi-pencil me-1"></i> Düzenle
-        </button>
+        <div class="btn-group">
+          <button
+            class="btn btn-outline-secondary me-2"
+            (click)="navigateTo('/payments')"
+          >
+            <i class="bi bi-arrow-left me-1"></i> Geri
+          </button>
+          <a
+            [routerLink]="['/payments/edit', payment ? payment.id : '']"
+            class="btn btn-outline-primary me-2"
+          >
+            <i class="bi bi-pencil me-1"></i> Düzenle
+          </a>
+        </div>
       </app-page-header>
 
       @if (payment) {
@@ -131,8 +136,8 @@ import { PageHeaderComponent, StatusBadgeComponent } from '../shared';
                 <div class="col-md-6">
                   <p class="mb-1 text-muted">Durum</p>
                   <app-status-badge
-                    [status]="customer.status"
-                    [type]="'customer'"
+                    [status]="customer ? customer.status : 'active'"
+                    type="customer"
                   ></app-status-badge>
                 </div>
               </div>
@@ -328,9 +333,9 @@ export class PaymentDetailComponent {
   private customerService = inject(CustomerService);
   private orderService = inject(OrderService);
 
-  payment: Payment | undefined;
-  customer: Customer | undefined;
-  order: Order | undefined;
+  payment: Payment | null = null;
+  customer: Customer | null = null;
+  order: Order | null = null;
   relatedPayments: Payment[] = [];
 
   constructor() {
@@ -343,28 +348,41 @@ export class PaymentDetailComponent {
   }
 
   loadPaymentData(paymentId: number): void {
-    this.payment = this.paymentService.getPaymentById(paymentId);
+    const payment = this.paymentService.getPaymentById(paymentId);
 
-    if (!this.payment) {
+    if (!payment) {
       this.router.navigate(['/payments']);
       return;
     }
 
+    this.payment = payment;
+
     // Load customer data
-    this.customerService.getCustomerById(this.payment.customerId).subscribe({
-      next: (customer) => {
-        if (customer) {
-          this.customer = customer;
-        }
-      },
-      error: (err) => {
-        console.error('Müşteri yüklenirken hata oluştu:', err);
-      },
-    });
+    if (this.payment.customerId) {
+      this.customerService.getCustomerById(this.payment.customerId).subscribe({
+        next: (customer) => {
+          if (customer) {
+            this.customer = customer;
+          }
+        },
+        error: (err) => {
+          console.error('Müşteri yüklenirken hata oluştu:', err);
+        },
+      });
+    }
 
     // Load order data if available
-    if (this.payment.orderId) {
-      this.order = this.orderService.getOrderById(this.payment.orderId);
+    if (this.payment && this.payment.orderId) {
+      this.orderService.getOrderById(this.payment.orderId).subscribe({
+        next: (order) => {
+          if (order) {
+            this.order = order;
+          }
+        },
+        error: (err) => {
+          console.error('Sipariş bilgileri alınırken hata oluştu:', err);
+        },
+      });
     }
 
     // Load related payments (other payments from the same customer)
@@ -409,5 +427,9 @@ export class PaymentDetailComponent {
       default:
         return method;
     }
+  }
+
+  navigateTo(path: string): void {
+    this.router.navigate([path]);
   }
 }

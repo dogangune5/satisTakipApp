@@ -330,18 +330,38 @@ export class PaymentListComponent {
     }
   }
 
-  private updateOrderPaymentStatus(orderId: number): void {
-    const order = this.orderService.getOrderById(orderId);
-    if (order) {
-      const newPaymentStatus = this.calculateOrderPaymentStatus(order);
-      const updatedOrder = { ...order, paymentStatus: newPaymentStatus };
-      this.orderService.updateOrder(updatedOrder);
-    }
+  updateOrderPaymentStatus(orderId: number): void {
+    if (!orderId) return;
+
+    this.orderService.getOrderById(orderId).subscribe({
+      next: (order) => {
+        if (order) {
+          const newPaymentStatus = this.calculateOrderPaymentStatus(order);
+          const updatedOrder = {
+            ...order,
+            paymentStatus: newPaymentStatus,
+          };
+
+          this.orderService.updateOrder(updatedOrder as Order).subscribe({
+            next: () => {
+              console.log('Sipariş ödeme durumu güncellendi');
+            },
+            error: (err) => {
+              console.error(
+                'Sipariş ödeme durumu güncellenirken hata oluştu:',
+                err
+              );
+            },
+          });
+        }
+      },
+      error: (err) => {
+        console.error('Sipariş bilgileri alınırken hata oluştu:', err);
+      },
+    });
   }
 
-  private calculateOrderPaymentStatus(
-    order: Order
-  ): 'pending' | 'partial' | 'paid' {
+  calculateOrderPaymentStatus(order: Order): 'pending' | 'partial' | 'paid' {
     const payments = this.paymentService.getPaymentsByOrderId(order.id || 0);
     if (!payments.length) return 'pending';
 

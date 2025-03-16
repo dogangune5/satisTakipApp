@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { Payment } from '../models';
+import { of } from 'rxjs';
 
 @Injectable({
   providedIn: 'root',
@@ -69,7 +70,7 @@ export class PaymentService {
     };
 
     this.payments.update((payments) => [...payments, newPayment]);
-    return newPayment;
+    return of(newPayment);
   }
 
   updatePayment(updatedPayment: Payment) {
@@ -80,6 +81,7 @@ export class PaymentService {
           : payment
       )
     );
+    return of(updatedPayment);
   }
 
   deletePayment(id: number) {

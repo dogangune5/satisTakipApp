@@ -98,7 +98,7 @@ declare var bootstrap: any;
                   <td>{{ customer.city }}</td>
                   <td>
                     <app-status-badge
-                      [status]="customer.status"
+                      [status]="customer.status || 'active'"
                       type="customer"
                     >
                     </app-status-badge>
@@ -219,11 +219,15 @@ export class CustomerListComponent implements OnInit {
       const term = this.searchTerm.toLowerCase().trim();
       filtered = filtered.filter(
         (customer) =>
-          customer.companyName.toLowerCase().includes(term) ||
+          (customer.companyName
+            ? customer.companyName.toLowerCase().includes(term)
+            : false) ||
           customer.name.toLowerCase().includes(term) ||
           customer.email.toLowerCase().includes(term) ||
           customer.phone.toLowerCase().includes(term) ||
-          customer.city.toLowerCase().includes(term) ||
+          (customer.city
+            ? customer.city.toLowerCase().includes(term)
+            : false) ||
           (customer.contactPerson &&
             customer.contactPerson.toLowerCase().includes(term))
       );

@@ -18,7 +18,7 @@ export interface Offer {
   description?: string;
   items: OfferItem[];
   totalAmount: number;
-  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired';
+  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'pending';
   validUntil: Date;
   createdAt: Date;
   updatedAt?: Date;

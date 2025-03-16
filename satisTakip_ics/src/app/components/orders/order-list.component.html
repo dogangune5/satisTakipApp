@@ -1,0 +1,141 @@
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="mb-0">Siparişler</h1>
+            <p class="text-muted">Tüm siparişleri görüntüleyin, ekleyin, düzenleyin veya silin</p>
+        </div>
+        <div>
+            <a routerLink="/orders/new" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-1"></i> Yeni Sipariş
+            </a>
+        </div>
+    </div>
+
+    <!-- Hata mesajı -->
+    <div *ngIf="errorMessage" class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        {{ errorMessage }}
+        <button type="button" class="btn-close" (click)="errorMessage = ''"></button>
+    </div>
+
+    <!-- Yükleniyor göstergesi -->
+    <div *ngIf="isLoading" class="text-center my-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Yükleniyor...</span>
+        </div>
+        <p class="mt-2">Siparişler yükleniyor...</p>
+    </div>
+
+    <div class="card mb-4" *ngIf="!isLoading">
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control" placeholder="Sipariş ara..." [(ngModel)]="searchTerm"
+                            (input)="search()" />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <select class="form-select" [(ngModel)]="statusFilter" (change)="filterByStatus(statusFilter)">
+                        <option value="all">Tüm Durumlar</option>
+                        <option value="new">Yeni</option>
+                        <option value="processing">İşleniyor</option>
+                        <option value="shipped">Gönderildi</option>
+                        <option value="delivered">Teslim Edildi</option>
+                        <option value="cancelled">İptal Edildi</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Sipariş No</th>
+                            <th>Müşteri</th>
+                            <th>Tutar</th>
+                            <th>Sipariş Durumu</th>
+                            <th>Ödeme Durumu</th>
+                            <th>Sipariş Tarihi</th>
+                            <th>Teslimat Tarihi</th>
+                            <th>İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <ng-container *ngIf="filteredOrders.length > 0; else noOrders">
+                            <tr *ngFor="let order of filteredOrders">
+                                <td>{{ order.orderNumber }}</td>
+                                <td>{{ order.customerName }}</td>
+                                <td>{{ order.totalAmount | currency:'₺':'symbol':'1.0-0' }}</td>
+                                <td>
+                                    <span class="badge rounded-pill" [ngClass]="getStatusClass(order.status)">
+                                        {{ getStatusText(order.status) }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge rounded-pill"
+                                        [ngClass]="getPaymentStatusClass(order.paymentStatus)">
+                                        {{ getPaymentStatusText(order.paymentStatus) }}
+                                    </span>
+                                </td>
+                                <td>{{ order.orderDate | date:'dd.MM.yyyy' }}</td>
+                                <td>{{ order.deliveryDate | date:'dd.MM.yyyy' }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a [routerLink]="['/orders', order.id]" class="btn btn-outline-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <a [routerLink]="['/orders', order.id, 'edit']"
+                                            class="btn btn-outline-secondary">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-outline-danger"
+                                            (click)="prepareDelete(order)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </ng-container>
+                        <ng-template #noOrders>
+                            <tr>
+                                <td colspan="8" class="text-center py-4">
+                                    <div class="text-muted">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        Sipariş bulunamadı
+                                    </div>
+                                </td>
+                            </tr>
+                        </ng-template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteOrderModal" tabindex="-1" aria-labelledby="deleteOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteOrderModalLabel">Sipariş Silme</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    <strong>{{ orderToDelete?.orderNumber }}</strong> numaralı siparişi silmek istediğinizden emin
+                    misiniz?
+                </p>
+                <p class="text-danger">Bu işlem geri alınamaz!</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-danger" (click)="deleteOrder()">Sil</button>
+            </div>
+        </div>
+    </div>
+</div>
